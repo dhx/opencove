@@ -171,13 +171,20 @@ export function updateWorkspacesWithAgentExit({
         return node
       }
 
+      // An exit can arrive again for the same session (a replay after a re-attach). It ended
+      // once: keep the node, its endedAt included, so nothing downstream sees a change.
+      const exitStatus = exitCode === 0 ? ('exited' as const) : ('failed' as const)
+      if (node.data.status === exitStatus && node.data.exitCode === exitCode) {
+        return node
+      }
+
       workspaceDidChange = true
 
       return {
         ...node,
         data: {
           ...node.data,
-          status: exitCode === 0 ? ('exited' as const) : ('failed' as const),
+          status: exitStatus,
           endedAt: now,
           exitCode,
         },

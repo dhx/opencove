@@ -26,6 +26,7 @@ import { BrowserPtyGeometryAckCoordinator } from './BrowserPtyGeometryAckCoordin
 import { BrowserPtyClientMetadataWatcher } from './BrowserPtyClientMetadataWatcher'
 import { BrowserPtySocketLifecycle, type BrowserPtySocketLease } from './BrowserPtySocketLifecycle'
 import { BrowserPtySessionAuthority } from './BrowserPtySessionAuthority'
+import { BrowserPtyExitedSessions } from './BrowserPtyExitedSessions'
 import { BrowserPtyClientStateReplay } from './BrowserPtyClientStateReplay'
 import { BrowserPtyClientAgentReexec } from './BrowserPtyClientAgentReexec'
 import { parseBrowserPtyMetadata } from './BrowserPtyMetadata'
@@ -63,6 +64,7 @@ export class BrowserPtyClient {
   })
   private readonly agentReexec = new BrowserPtyClientAgentReexec()
   private readonly dataListeners = new Set<(event: TerminalDataEvent) => void>()
+  private readonly exitedSessions = new BrowserPtyExitedSessions()
   private readonly exitListeners = new Set<(event: TerminalExitEvent) => void>()
   private readonly geometryListeners = new Set<(event: TerminalGeometryEvent) => void>()
   private readonly resyncListeners = new Set<(event: TerminalResyncEvent) => void>()
@@ -157,6 +159,7 @@ export class BrowserPtyClient {
         typeof record.exitCode === 'number' && Number.isFinite(record.exitCode)
           ? Math.floor(record.exitCode)
           : 0
+      this.exitedSessions.mark(sessionId)
       this.stateReplay.disposeSession(sessionId)
       this.sessionAuthority.remove(sessionId, new Error('Terminal session exited'))
       this.agentReexec.rejectSession(sessionId, new Error('Terminal session exited'))
@@ -280,6 +283,9 @@ export class BrowserPtyClient {
   }
 
   public async write(payload: WriteTerminalInput): Promise<void> {
+    if (this.exitedSessions.has(payload.sessionId)) {
+      return // the process is gone; as in a terminal emulator, input to it goes nowhere
+    }
     const attached = await this.sessionAuthority.ensureAttached(
       this.socketLifecycle,
       payload.sessionId,
@@ -296,6 +302,9 @@ export class BrowserPtyClient {
   }
 
   public async reexecAgent(payload: TerminalAgentReexecInput): Promise<TerminalAgentReexecResult> {
+    if (this.exitedSessions.has(payload.sessionId)) {
+      return this.exitedSessions.reexecResult(payload)
+    }
     const attached = await this.sessionAuthority.ensureAttached(
       this.socketLifecycle,
       payload.sessionId,
@@ -312,6 +321,9 @@ export class BrowserPtyClient {
   }
 
   public async resize(payload: ResizeTerminalInput): Promise<TerminalGeometryCommitResult> {
+    if (this.exitedSessions.has(payload.sessionId)) {
+      return this.exitedSessions.resizeResult(payload)
+    }
     const attached = await this.sessionAuthority.ensureAttached(
       this.socketLifecycle,
       payload.sessionId,
@@ -369,6 +381,7 @@ export class BrowserPtyClient {
   }
 
   public async attach(payload: AttachTerminalInput): Promise<AttachTerminalResult> {
+    this.exitedSessions.clear(payload.sessionId)
     this.sessionAuthority.track(payload)
     const attached = await this.sessionAuthority.ensureAttached(
       this.socketLifecycle,
@@ -379,6 +392,7 @@ export class BrowserPtyClient {
   }
 
   public async detach(payload: DetachTerminalInput): Promise<void> {
+    this.exitedSessions.clear(payload.sessionId)
     this.sessionAuthority.remove(payload.sessionId, new Error('Terminal session detached'))
     this.agentReexec.rejectSession(payload.sessionId, new Error('Terminal session detached'))
     this.stateReplay.disposeSession(payload.sessionId)
