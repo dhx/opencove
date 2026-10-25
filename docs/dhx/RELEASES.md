@@ -6,6 +6,15 @@ for [opencove-image](https://github.com/dhx/opencove-image). They are upstream's
 
 ## Cutting a release
 
+**Automatically:** when upstream's `CI` workflow finishes green for a push to `main`, `dhx-auto-release.yml`
+releases that commit as the next version: the next patch of `package.json`'s version with `-dhx-<nnn>`
+counted up (`0.4.1-dhx-001`, `0.4.1-dhx-002`, …; when upstream moves to 0.4.1, `0.4.2-dhx-001`). It skips a
+commit that `main` has already moved past (that commit's own CI run releases it) and one that already has a
+release. The release itself is `dhx-release.yml`, called with the version and the commit; it runs all the
+checks below again and publishes only if they pass.
+
+**By hand:**
+
 ```sh
 git tag dhx/v0.4.1-dhx-001 && git push origin dhx/v0.4.1-dhx-001
 ```
@@ -62,4 +71,8 @@ merge, and a returning phone-home shows up in the checks.
 
 | Change | Why |
 |---|---|
-| Release workflow and checks (`.github/workflows/dhx-release.yml`, `scripts/dhx/`) | Our own verified builds |
+| Release workflow and checks (`.github/workflows/dhx-release.yml`, `dhx-auto-release.yml`, `scripts/dhx/`) | Our own verified builds, released automatically when main is green (#1) |
+| Files dropped or pasted onto a terminal in the Web UI go to the worker (`/files/drop`), and their path is pasted | The Web UI had no way to pass a file to an agent (#2) |
+| No auto-update, no GitHub plugin catalog unless `OPENCOVE_PLUGIN_CATALOG=1`, no default upstream downloads for managed SSH, no Gemini schema fetch, spellcheck off, issue reports to this fork; plugin views in an opaque origin, website nodes refuse the UI's own origin | Nothing contacts third parties on its own; plugin and website content cannot act as the UI (#3) |
+| Token and password from env or file (not argv, not printed), no `?token=` unless enabled, Origin check for bearer requests, JSON and size limit on `/invoke`, `/debug/shell` off, security headers, Secure cookie behind TLS, no open bind without a password, database files 0600 | The worker's credentials stay out of process lists and logs; a token-injecting proxy is safe (#4) |
+| Agents without permission bypass unless `OPENCOVE_AGENT_FULL_ACCESS` allows it; no executable/env overrides from the API; `approveRoot` refuses `/`, home and secret folders; SSH host/user validated; terminal shims send only what they need (`OPENCOVE_TERMINAL_AGENT_SHIMS=0` turns them off); no startup rewrite of `~/.claude`/`~/.codex`; private OpenCode config | Agents and API callers cannot escalate on their own (#5) |
