@@ -300,6 +300,34 @@ export function registerTopologyHandlers(
       }
 
       try {
+        // Browse without approving the folder on the remote worker (it refuses to approve the
+        // home directory and secret folders). Older remote workers lack the query; for them we
+        // keep the previous approve-then-read behaviour.
+        const browseRequest = {
+          kind: 'query' as const,
+          id: 'filesystem.browseDirectory',
+          payload: { uri: toFileUri(payload.path) },
+        }
+        const browse = await invokeControlSurface(endpoint, browseRequest)
+        if (!browse.result) {
+          throw createAppError('worker.unavailable', {
+            debugMessage: `Remote control surface unavailable: ${payload.endpointId}`,
+          })
+        }
+        if (browse.result.ok === true) {
+          const browsed = browse.result.value as { entries?: unknown }
+          return {
+            endpointId: payload.endpointId,
+            path: payload.path,
+            entries: Array.isArray(browsed.entries)
+              ? (browsed.entries as ReadEndpointDirectoryResult['entries'])
+              : [],
+          }
+        }
+        if (!isUnknownControlSurfaceOperationError(browse.result.error, browseRequest.id)) {
+          throw createAppError(browse.result.error)
+        }
+
         const approveRequest = {
           kind: 'command' as const,
           id: 'workspace.approveRoot',

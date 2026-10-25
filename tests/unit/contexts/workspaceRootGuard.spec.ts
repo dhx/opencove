@@ -5,6 +5,9 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { findWorkspaceRootRefusal } from '../../../src/contexts/workspace/infrastructure/approval/workspaceRootGuard'
 import { createControlSurface } from '../../../src/app/main/controlSurface/controlSurface'
 import { registerWorkspaceHandlers } from '../../../src/app/main/controlSurface/handlers/workspaceHandlers'
+import { registerFilesystemHandlers } from '../../../src/app/main/controlSurface/handlers/filesystemHandlers'
+import { writeFile } from 'node:fs/promises'
+import { pathToFileURL } from 'node:url'
 import type { ControlSurfaceContext } from '../../../src/app/main/controlSurface/types'
 
 const posixOptions = {
@@ -110,5 +113,39 @@ describe('workspace root guard', () => {
     })
     expect(accepted.ok).toBe(true)
     expect(registered).toEqual([project])
+  })
+
+  it('lets the remote directory picker list a home-like folder without approving it', async () => {
+    const home = await mkdtemp(join(tmpdir(), 'opencove-browse-home-'))
+    roots.push(home)
+    await mkdir(join(home, 'repo'))
+    await writeFile(join(home, 'notes.txt'), 'private')
+    const registered: string[] = []
+    const controlSurface = createControlSurface()
+    registerFilesystemHandlers(controlSurface, {
+      approvedWorkspaces: {
+        registerRoot: async path => {
+          registered.push(path)
+        },
+        isPathApproved: async () => false,
+      },
+    })
+    const ctx = { now: () => new Date(), capabilities: {} } as unknown as ControlSurfaceContext
+
+    const browsed = await controlSurface.invoke(ctx, {
+      kind: 'query',
+      id: 'filesystem.browseDirectory',
+      payload: { uri: pathToFileURL(home).href },
+    })
+    expect(browsed).toMatchObject({ ok: true, value: { entries: [{ name: 'repo' }] } })
+    expect(browsed.ok && (browsed.value as { entries: unknown[] }).entries).toHaveLength(1)
+    expect(registered).toEqual([])
+
+    const read = await controlSurface.invoke(ctx, {
+      kind: 'query',
+      id: 'filesystem.readDirectory',
+      payload: { uri: pathToFileURL(home).href },
+    })
+    expect(read.ok).toBe(false)
   })
 })
