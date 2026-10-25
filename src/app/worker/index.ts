@@ -31,6 +31,8 @@ import {
 import { readRepeatedWorkerFlagValues, readWorkerFlagValue } from './workerCliArguments'
 import { CONTROL_SURFACE_SHUTDOWN_WATCHDOG_MS } from '../../shared/runtime/controlSurfaceShutdown'
 import { getRuntimeBuildIdentity } from '../../shared/runtime/runtimeBuildIdentity'
+import { formatWorkerReadyLine, resolveWorkerSecrets, scrubWorkerSecretEnv } from './workerSecrets'
+import { resolveWorkerBindRefusal } from './workerBindPolicy'
 
 function resolvePort(argv: string[]): number | null {
   const raw = readWorkerFlagValue(argv, '--port')
@@ -77,12 +79,21 @@ function resolveStartedBy(argv: string[]): 'cli' | 'desktop' {
   throw new Error(`[worker] invalid --started-by: ${raw}`)
 }
 
+function isEnvFlagEnabled(name: string): boolean {
+  const raw = process.env[name]?.trim().toLowerCase()
+  return raw === '1' || raw === 'true'
+}
+
 async function main(): Promise<void> {
   const argv = process.argv.slice(2)
   if (argv.includes('--help') || argv.includes('-h')) {
     process.stdout.write('OpenCove worker: use opencove worker start --help for CLI usage.\n')
     return
   }
+  // Read secrets first and drop them from the environment before anything spawns a child process
+  // (login-shell probes, terminals, agents, plugin hosts).
+  const secrets = resolveWorkerSecrets(argv, process.env)
+  scrubWorkerSecretEnv(process.env)
   // The worker is frequently launched from GUI contexts (Desktop app, system services) where PATH
   // can be incomplete. Hydrate the environment so git/ssh/etc behave consistently across Desktop,
   // Web UI, and remote/headless installs.
@@ -93,18 +104,29 @@ async function main(): Promise<void> {
   const bindHostname = readWorkerFlagValue(argv, '--hostname') ?? '127.0.0.1'
   const hostname = readWorkerFlagValue(argv, '--advertise-hostname') ?? bindHostname
   const port = resolvePort(argv) ?? 0
-  const token = readWorkerFlagValue(argv, '--token')
-  const webUiPasswordHash = readWorkerFlagValue(argv, '--web-ui-password-hash')
-  const webUiPassword = readWorkerFlagValue(argv, '--web-ui-password')
-  if (webUiPasswordHash && webUiPassword) {
-    throw new Error('[worker] choose either --web-ui-password or --web-ui-password-hash')
+  const token = secrets.token
+  const resolvedWebUiPasswordHash = secrets.webUiPassword
+    ? await hashWebUiPassword(secrets.webUiPassword)
+    : secrets.webUiPasswordHash
+  const bindRefusal = resolveWorkerBindRefusal({
+    bindHostname,
+    webUiPasswordConfigured: Boolean(resolvedWebUiPasswordHash),
+    allowInsecureBind: hasFlag(argv, '--allow-insecure-bind'),
+  })
+  if (bindRefusal) {
+    throw new Error(bindRefusal)
   }
-  const resolvedWebUiPasswordHash = webUiPassword
-    ? await hashWebUiPassword(webUiPassword)
-    : webUiPasswordHash
   const parentPid = resolveParentPid(argv)
   const enableWebUi = !hasFlag(argv, '--disable-web-ui')
   const startedBy = resolveStartedBy(argv)
+  const enableDebugRoutes = isEnvFlagEnabled('OPENCOVE_ENABLE_DEBUG_ROUTES')
+  const allowQueryToken =
+    hasFlag(argv, '--allow-query-token') || isEnvFlagEnabled('OPENCOVE_ALLOW_QUERY_TOKEN')
+  // Only a Desktop parent reads the token from our stdout (a private pipe). Anywhere else stdout
+  // is a terminal or a log, so print where the token lives instead.
+  const connectionFilePath = resolve(userDataPath, WORKER_CONTROL_SURFACE_CONNECTION_FILE)
+  const formatReadyLine = (info: Record<string, unknown>): string =>
+    formatWorkerReadyLine(info, { includeToken: startedBy === 'desktop', connectionFilePath })
   const appVersion =
     getRuntimeBuildIdentity()?.appVersion ?? readWorkerFlagValue(argv, '--app-version')
 
@@ -128,7 +150,7 @@ async function main(): Promise<void> {
         expectedAppVersion: reusePolicy.expectedAppVersion,
       }))
     ) {
-      process.stdout.write(`${JSON.stringify(connectionInfo)}\n`)
+      process.stdout.write(formatReadyLine({ ...connectionInfo }))
       process.stderr.write(
         '[opencove-worker] Local Worker already running for this user data; printed existing connection info.\n',
       )
@@ -204,6 +226,8 @@ async function main(): Promise<void> {
     ownsPtyRuntime: true,
     dbPath: resolve(userDataPath, 'opencove.db'),
     enableWebShell: enableWebUi,
+    enableDebugRoutes,
+    allowQueryToken,
     webUiPasswordHash: resolvedWebUiPasswordHash ?? null,
     connectionFileName: WORKER_CONTROL_SURFACE_CONNECTION_FILE,
     connectionStartedBy: startedBy,
@@ -236,7 +260,7 @@ async function main(): Promise<void> {
   })()
 
   const info = await server.ready
-  process.stdout.write(`${JSON.stringify(info)}\n`)
+  process.stdout.write(formatReadyLine({ ...info }))
   process.stderr.write(
     `[opencove-worker] ${startedBy === 'desktop' ? 'private control' : 'control surface'}: http://${info.hostname}:${info.port}/\n`,
   )
@@ -255,9 +279,11 @@ async function main(): Promise<void> {
     process.stderr.write(
       `[opencove-worker] web ui: http://${activeWebAddress.hostname}:${activeWebAddress.port}/\n`,
     )
-    process.stderr.write(
-      `[opencove-worker] debug shell: http://${activeWebAddress.hostname}:${activeWebAddress.port}/debug/shell\n`,
-    )
+    if (enableDebugRoutes) {
+      process.stderr.write(
+        `[opencove-worker] debug shell: http://${activeWebAddress.hostname}:${activeWebAddress.port}/debug/shell\n`,
+      )
+    }
   } else if (desktopWebStatus?.state === 'failed' || desktopWebStatus?.state === 'degraded') {
     process.stderr.write(`[opencove-worker] web ui unavailable: ${desktopWebStatus.error}\n`)
   } else {

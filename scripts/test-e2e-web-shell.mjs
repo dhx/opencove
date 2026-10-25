@@ -57,6 +57,9 @@ async function startWorker(options) {
       env: {
         ...process.env,
         ELECTRON_RUN_AS_NODE: '1',
+        // The suite drives /debug/shell, which authenticates /events and /pty with ?token=.
+        OPENCOVE_ENABLE_DEBUG_ROUTES: '1',
+        OPENCOVE_ALLOW_QUERY_TOKEN: '1',
       },
       shell: process.platform === 'win32',
       stdio: ['ignore', 'pipe', 'pipe'],

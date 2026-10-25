@@ -129,6 +129,7 @@ describe('Control Surface HTTP server (worker web surfaces)', () => {
         },
       },
       enableWebShell: true,
+      enableDebugRoutes: true,
     })
 
     try {

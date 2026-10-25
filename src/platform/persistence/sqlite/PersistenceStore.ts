@@ -4,7 +4,7 @@ import Database from 'better-sqlite3'
 import { drizzle, type BetterSQLite3Database } from 'drizzle-orm/better-sqlite3'
 import { eq } from 'drizzle-orm'
 import type { PersistWriteResult } from '../../../shared/contracts/dto'
-import { backupDbFile, moveCorruptDbAside } from './dbFiles'
+import { backupDbFile, ensurePrivateDbFile, moveCorruptDbAside } from './dbFiles'
 import { DB_SCHEMA_VERSION, DEFAULT_MAX_WORKSPACE_STATE_RAW_BYTES } from './constants'
 import { migrate } from './migrate'
 import { normalizePersistedAppState, normalizeScrollback } from './normalize'
@@ -107,6 +107,7 @@ export async function createPersistenceStore(storeOptions: {
 
   let sqlite: Database.Database
   try {
+    await ensurePrivateDbFile(storeOptions.dbPath)
     sqlite = new Database(storeOptions.dbPath)
   } catch (error) {
     if (storeOptions.strictRecovery) {
@@ -114,6 +115,7 @@ export async function createPersistenceStore(storeOptions: {
     }
     recovery = 'corrupt_db'
     await moveCorruptDbAside(storeOptions.dbPath, now)
+    await ensurePrivateDbFile(storeOptions.dbPath)
     sqlite = new Database(storeOptions.dbPath)
   }
 
@@ -142,6 +144,7 @@ export async function createPersistenceStore(storeOptions: {
     }
 
     await moveCorruptDbAside(storeOptions.dbPath, now)
+    await ensurePrivateDbFile(storeOptions.dbPath)
     sqlite = new Database(storeOptions.dbPath)
     migrate(sqlite)
   }

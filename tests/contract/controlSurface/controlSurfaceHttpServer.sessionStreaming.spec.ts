@@ -12,6 +12,7 @@ import {
   sendJson,
   toWsUrl,
   waitForMessage,
+  bearerHeaders,
 } from './controlSurfaceHttpServer.sessionStreaming.testUtils'
 
 describe('Control Surface HTTP server (session streaming)', () => {
@@ -57,10 +58,10 @@ describe('Control Surface HTTP server (session streaming)', () => {
     try {
       const info = await server.ready
       const baseUrl = `http://${info.hostname}:${info.port}`
-      const wsUrl = toWsUrl(baseUrl, '/pty', { token: 'test-token' })
+      const wsUrl = toWsUrl(baseUrl, '/pty', {})
 
       await new Promise<void>((resolvePromise, rejectPromise) => {
-        const ws = new WebSocket(wsUrl)
+        const ws = new WebSocket(wsUrl, bearerHeaders('test-token'))
         const timer = setTimeout(() => {
           ws.terminate()
           rejectPromise(new Error('Timed out waiting for connection rejection'))
@@ -129,9 +130,9 @@ describe('Control Surface HTTP server (session streaming)', () => {
     try {
       const info = await server.ready
       const baseUrl = `http://${info.hostname}:${info.port}`
-      const wsUrl = toWsUrl(baseUrl, '/pty', { token: 'test-token' })
+      const wsUrl = toWsUrl(baseUrl, '/pty', {})
 
-      const ws = new WebSocket(wsUrl, 'opencove-pty.v1')
+      const ws = new WebSocket(wsUrl, 'opencove-pty.v1', bearerHeaders('test-token'))
       await new Promise<void>((resolvePromise, rejectPromise) => {
         ws.once('open', resolvePromise)
         ws.once('error', rejectPromise)
@@ -147,7 +148,7 @@ describe('Control Surface HTTP server (session streaming)', () => {
 
       ws.close()
 
-      const wsVersion = new WebSocket(wsUrl, 'opencove-pty.v1')
+      const wsVersion = new WebSocket(wsUrl, 'opencove-pty.v1', bearerHeaders('test-token'))
       await new Promise<void>((resolvePromise, rejectPromise) => {
         wsVersion.once('open', resolvePromise)
         wsVersion.once('error', rejectPromise)

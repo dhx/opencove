@@ -24,7 +24,9 @@ async function openClient(port: number): Promise<{
   socket: WebSocket
   instanceId: string
 }> {
-  const socket = new WebSocket(`ws://127.0.0.1:${port}/pty?token=test-token`, 'opencove-pty.v1')
+  const socket = new WebSocket(`ws://127.0.0.1:${port}/pty`, 'opencove-pty.v1', {
+    headers: { authorization: 'Bearer test-token' },
+  })
   await new Promise<void>((resolvePromise, rejectPromise) => {
     socket.once('open', resolvePromise)
     socket.once('error', rejectPromise)

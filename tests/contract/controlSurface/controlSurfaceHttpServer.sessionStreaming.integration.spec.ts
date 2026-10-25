@@ -19,6 +19,7 @@ import {
   toWsUrl,
   waitForCondition,
   waitForMessage,
+  bearerHeaders,
 } from './controlSurfaceHttpServer.sessionStreaming.testUtils'
 
 describe('Control Surface HTTP server (session streaming integration)', () => {
@@ -140,7 +141,7 @@ describe('Control Surface HTTP server (session streaming integration)', () => {
     try {
       const info = await server.ready
       const baseUrl = `http://${info.hostname}:${info.port}`
-      const wsUrl = toWsUrl(baseUrl, '/pty', { token: 'test-token' })
+      const wsUrl = toWsUrl(baseUrl, '/pty', {})
 
       const workspaceId = randomUUID()
       const spaceId = randomUUID()
@@ -163,7 +164,7 @@ describe('Control Surface HTTP server (session streaming integration)', () => {
       const sessionId = spawnRes.data.value?.sessionId as string
       expect(sessionId).toContain('test-session-')
 
-      const controller = new WebSocket(wsUrl, 'opencove-pty.v1')
+      const controller = new WebSocket(wsUrl, 'opencove-pty.v1', bearerHeaders('test-token'))
       await new Promise<void>((resolvePromise, rejectPromise) => {
         controller.once('open', resolvePromise)
         controller.once('error', rejectPromise)
@@ -188,7 +189,7 @@ describe('Control Surface HTTP server (session streaming integration)', () => {
       )
       expect(controllerAttached.role).toBe('controller')
 
-      const viewer = new WebSocket(wsUrl, 'opencove-pty.v1')
+      const viewer = new WebSocket(wsUrl, 'opencove-pty.v1', bearerHeaders('test-token'))
       await new Promise<void>((resolvePromise, rejectPromise) => {
         viewer.once('open', resolvePromise)
         viewer.once('error', rejectPromise)
@@ -363,7 +364,7 @@ describe('Control Surface HTTP server (session streaming integration)', () => {
       expect(viewerMetadata.resumeSessionId).toBe('resume-session-1')
 
       ptyRuntime.emitData(sessionId, 'attach-delta\r\n')
-      const catchupViewer = new WebSocket(wsUrl, 'opencove-pty.v1')
+      const catchupViewer = new WebSocket(wsUrl, 'opencove-pty.v1', bearerHeaders('test-token'))
       await new Promise<void>((resolvePromise, rejectPromise) => {
         catchupViewer.once('open', resolvePromise)
         catchupViewer.once('error', rejectPromise)
@@ -395,7 +396,7 @@ describe('Control Surface HTTP server (session streaming integration)', () => {
       expect(catchupChunk.data).toContain('attach-delta')
       catchupViewer.close()
 
-      const lateJoiner = new WebSocket(wsUrl, 'opencove-pty.v1')
+      const lateJoiner = new WebSocket(wsUrl, 'opencove-pty.v1', bearerHeaders('test-token'))
       await new Promise<void>((resolvePromise, rejectPromise) => {
         lateJoiner.once('open', resolvePromise)
         lateJoiner.once('error', rejectPromise)
@@ -431,7 +432,7 @@ describe('Control Surface HTTP server (session streaming integration)', () => {
       ptyRuntime.emitData(sessionId, bigChunk)
       ptyRuntime.emitData(sessionId, 'y'.repeat(410_000))
 
-      const reconnect = new WebSocket(wsUrl, 'opencove-pty.v1')
+      const reconnect = new WebSocket(wsUrl, 'opencove-pty.v1', bearerHeaders('test-token'))
       await new Promise<void>((resolvePromise, rejectPromise) => {
         reconnect.once('open', resolvePromise)
         reconnect.once('error', rejectPromise)

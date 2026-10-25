@@ -122,8 +122,9 @@ describe('Desktop-managed Control Surface Web access', () => {
         headers: { cookie, origin: `http://127.0.0.1:${webPort}` },
       })
       const privateSocket = new WebSocket(
-        `ws://${privateInfo.hostname}:${privateInfo.port}/pty?token=${privateInfo.token}`,
+        `ws://${privateInfo.hostname}:${privateInfo.port}/pty`,
         'opencove-pty.v1',
+        { headers: { authorization: `Bearer ${privateInfo.token}` } },
       )
       await Promise.all(
         [webSocket, privateSocket].map(

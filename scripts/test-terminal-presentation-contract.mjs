@@ -112,9 +112,9 @@ async function main() {
       throw new Error(`Unexpected initial geometry: ${JSON.stringify(initialSnapshot)}`)
     }
 
-    const ws = new WebSocket(`${baseUrl.replace(/^http/, 'ws')}/pty?token=${token}`, [
-      'opencove-pty.v1',
-    ])
+    const ws = new WebSocket(`${baseUrl.replace(/^http/, 'ws')}/pty`, ['opencove-pty.v1'], {
+      headers: { authorization: `Bearer ${token}` },
+    })
 
     await new Promise((resolvePromise, rejectPromise) => {
       ws.once('open', resolvePromise)
@@ -139,9 +139,9 @@ async function main() {
     )
     await attachedPromise
 
-    const viewerWs = new WebSocket(`${baseUrl.replace(/^http/, 'ws')}/pty?token=${token}`, [
-      'opencove-pty.v1',
-    ])
+    const viewerWs = new WebSocket(`${baseUrl.replace(/^http/, 'ws')}/pty`, ['opencove-pty.v1'], {
+      headers: { authorization: `Bearer ${token}` },
+    })
 
     await new Promise((resolvePromise, rejectPromise) => {
       viewerWs.once('open', resolvePromise)

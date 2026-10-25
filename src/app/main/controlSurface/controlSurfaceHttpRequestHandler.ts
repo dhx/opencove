@@ -9,7 +9,13 @@ import { normalizeInvokeRequest } from './validate'
 import { renderWorkerWebShellPage } from './workerWebShellPage'
 import { tryResolveWebUiResponse } from './webUiAssets'
 import type { WebSessionManager } from './http/webSessionManager'
-import { readJsonBody, sendJson } from './http/httpJson'
+import {
+  HttpBodyTooLargeError,
+  isJsonContentType,
+  MAX_INVOKE_BODY_BYTES,
+  readJsonBody,
+  sendJson,
+} from './http/httpJson'
 import { resolveRequestAuth, type RequestAuth } from './http/requestAuth'
 import { writeSseEvent, type SyncEventPayload } from './http/syncSse'
 import { tryHandleWebAuthRoutes } from './http/webAuthRoutes'
@@ -17,6 +23,11 @@ import { gateWebUiEntrypoint } from './http/webUiEntryGate'
 import { publishSyncEvent } from './http/publishSyncEvent'
 import { shouldAllowDevWebUiOrigin } from './http/devWebUiOrigin'
 import { buildUnauthorizedResult } from './http/unauthorizedResult'
+import {
+  applyWebUiAssetSecurityHeaders,
+  applyWebUiHtmlSecurityHeaders,
+  isHtmlContentType,
+} from './http/webUiSecurityHeaders'
 import type {
   ControlSurfaceHttpListenerOptions,
   ControlSurfaceHttpListenerRequestContext,
@@ -37,6 +48,11 @@ export interface ControlSurfaceHttpRequestHandlerDeps {
   desktopSyncEventSink?: (payload: SyncEventPayload) => number
   getWebAccessPolicy: () => ControlSurfaceWebAccessPolicy
   isRuntimeClosed: () => boolean
+  /** Accept `?token=` on /events (browsers cannot set headers on EventSource). Off by default. */
+  allowQueryToken?: boolean
+  /** Serve the `/debug/shell` page. Off by default. */
+  enableDebugRoutes?: boolean
+  maxInvokeBodyBytes?: number
 }
 
 function listenerAllowsAuth(
@@ -56,6 +72,14 @@ function listenerServesWeb(role: ControlSurfaceHttpListenerOptions['role']): boo
 
 function requiresPrivateBearer(operationId: string): boolean {
   return operationId.startsWith('worker.')
+}
+
+function sendInvalidInvokeRequest(res: ServerResponse, status: number, debugMessage: string): void {
+  sendJson(res, status, {
+    __opencoveControlEnvelope: true,
+    ok: false,
+    error: createAppErrorDescriptor('common.invalid_input', { debugMessage }),
+  })
 }
 
 function sendForbidden(res: ServerResponse): void {
@@ -125,10 +149,16 @@ export function createControlSurfaceHttpRequestHandler(
         return
       }
 
-      if (servesWeb && listener.enableWebShell && url.pathname === '/debug/shell') {
+      if (
+        servesWeb &&
+        listener.enableWebShell &&
+        deps.enableDebugRoutes === true &&
+        url.pathname === '/debug/shell'
+      ) {
         const host = typeof req.headers.host === 'string' ? req.headers.host : ''
         res.statusCode = 200
         res.setHeader('content-type', 'text/html; charset=utf-8')
+        applyWebUiHtmlSecurityHeaders(res)
         res.end(renderWorkerWebShellPage({ host }))
         return
       }
@@ -148,6 +178,11 @@ export function createControlSurfaceHttpRequestHandler(
       if (webUiResponse) {
         res.statusCode = webUiResponse.statusCode
         res.setHeader('content-type', webUiResponse.contentType)
+        if (isHtmlContentType(webUiResponse.contentType)) {
+          applyWebUiHtmlSecurityHeaders(res)
+        } else {
+          applyWebUiAssetSecurityHeaders(res)
+        }
         res.end(webUiResponse.body)
         return
       }
@@ -158,7 +193,7 @@ export function createControlSurfaceHttpRequestHandler(
           url,
           token: deps.token,
           webSessions: deps.webSessions,
-          allowQueryToken: true,
+          allowQueryToken: deps.allowQueryToken === true,
           now: deps.ctx.now(),
         })
         if (!auth || !listenerAllowsAuth(listener.role, auth)) {
@@ -239,8 +274,32 @@ export function createControlSurfaceHttpRequestHandler(
       return
     }
 
+    if (!isJsonContentType(req.headers['content-type'])) {
+      sendInvalidInvokeRequest(res, 415, 'POST /invoke requires Content-Type: application/json.')
+      return
+    }
+
+    let body: unknown
     try {
-      const request = normalizeInvokeRequest(await readJsonBody(req))
+      body = await readJsonBody(req, {
+        maxBytes: deps.maxInvokeBodyBytes ?? MAX_INVOKE_BODY_BYTES,
+      })
+    } catch (error) {
+      if (error instanceof HttpBodyTooLargeError) {
+        res.setHeader('connection', 'close')
+        sendInvalidInvokeRequest(res, 413, error.message)
+        return
+      }
+      sendInvalidInvokeRequest(
+        res,
+        400,
+        error instanceof Error ? error.message : 'Invalid request payload.',
+      )
+      return
+    }
+
+    try {
+      const request = normalizeInvokeRequest(body)
       if (
         requiresPrivateBearer(request.id) &&
         (listener.role === 'web' || auth.kind !== 'bearer')

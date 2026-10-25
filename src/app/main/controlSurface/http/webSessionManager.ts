@@ -163,11 +163,17 @@ export function buildWebSessionCookieHeader(options: {
   cookieName: string
   cookieValue: string
   maxAgeSeconds: number
+  secure?: boolean
 }): string {
   const base = `${options.cookieName}=${options.cookieValue}`
-  return `${base}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${options.maxAgeSeconds}`
+  const secure = options.secure === true ? '; Secure' : ''
+  return `${base}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${options.maxAgeSeconds}${secure}`
 }
 
-export function buildWebSessionClearCookieHeader(options: { cookieName: string }): string {
-  return `${options.cookieName}=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0`
+export function buildWebSessionClearCookieHeader(options: {
+  cookieName: string
+  secure?: boolean
+}): string {
+  const secure = options.secure === true ? '; Secure' : ''
+  return `${options.cookieName}=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0${secure}`
 }

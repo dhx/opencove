@@ -30,6 +30,13 @@ export interface RegisterControlSurfaceHttpServerOptions {
   ownsPtyRuntime?: boolean
   deleteEntry?: (uri: string) => Promise<void>
   enableWebShell?: boolean
+  /**
+   * Accept the bearer token as `?token=` on /events and /pty. Off by default: query strings end up
+   * in logs and browser history. Only for clients that cannot send an Authorization header.
+   */
+  allowQueryToken?: boolean
+  /** Serve debugging pages such as `/debug/shell`. Off by default. */
+  enableDebugRoutes?: boolean
   webUiPasswordHash?: string | null
   desktopSyncEventSink?: (payload: SyncEventPayload) => number
   desktopPtyStateSink?: (payload: TerminalSessionStateEvent) => number

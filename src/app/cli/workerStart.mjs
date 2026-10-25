@@ -37,6 +37,8 @@ export async function startWorker(argv) {
   const userData = readFlagValue(argv, '--user-data')
   const webUiPasswordHash = readFlagValue(argv, '--web-ui-password-hash')
   const webUiPassword = readFlagValue(argv, '--web-ui-password')
+  const tokenFile = readFlagValue(argv, '--token-file')
+  const webUiPasswordFile = readFlagValue(argv, '--web-ui-password-file')
   const approvedRoots = []
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -76,16 +78,33 @@ export async function startWorker(argv) {
     workerArgs.push('--user-data', userData)
   }
 
+  // Secrets go to the Worker through its environment, never its argv: every local user can read
+  // a process's command line. File flags only carry a path.
+  const secretEnv = {}
   if (token) {
-    workerArgs.push(`--token=${token}`)
+    secretEnv.OPENCOVE_WORKER_TOKEN = token
+  }
+
+  if (tokenFile) {
+    workerArgs.push(`--token-file=${tokenFile}`)
   }
 
   if (webUiPasswordHash) {
-    workerArgs.push(`--web-ui-password-hash=${webUiPasswordHash}`)
+    secretEnv.OPENCOVE_WEB_UI_PASSWORD_HASH = webUiPasswordHash
   }
 
   if (webUiPassword) {
-    workerArgs.push(`--web-ui-password=${webUiPassword}`)
+    secretEnv.OPENCOVE_WEB_UI_PASSWORD = webUiPassword
+  }
+
+  if (webUiPasswordFile) {
+    workerArgs.push(`--web-ui-password-file=${webUiPasswordFile}`)
+  }
+
+  for (const flag of ['--allow-insecure-bind', '--allow-query-token']) {
+    if (argv.includes(flag)) {
+      workerArgs.push(flag)
+    }
   }
 
   for (const root of approvedRoots) {
@@ -108,9 +127,12 @@ export async function startWorker(argv) {
 
   const child = spawn(workerRuntime.executablePath, [workerPath, ...workerArgs], {
     stdio: 'inherit',
-    env: createWorkerSpawnEnvironment(workerRuntime.kind, process.env, {
-      disableElectronSandbox: shouldDisableSandbox,
-    }),
+    env: {
+      ...createWorkerSpawnEnvironment(workerRuntime.kind, process.env, {
+        disableElectronSandbox: shouldDisableSandbox,
+      }),
+      ...secretEnv,
+    },
     windowsHide: true,
   })
   child.on('exit', code => {

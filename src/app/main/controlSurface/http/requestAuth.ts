@@ -89,9 +89,29 @@ function matchesHostHeader(candidateUrl: string, hostRaw: string): boolean {
   }
 }
 
+function resolveHostHeader(req: IncomingMessage): string {
+  return typeof req.headers.host === 'string' ? req.headers.host.trim() : ''
+}
+
+/**
+ * Token-authenticated callers (CLI, Desktop main process, other Workers, server-side proxies) do
+ * not send an Origin header. A browser always does for cross-origin requests and WebSocket
+ * upgrades, so a token that arrives with a foreign Origin was attached by something other than
+ * the page that owns this host (for example a proxy that injects the token for every request).
+ */
+export function isOriginAllowedForTokenAuth(req: IncomingMessage): boolean {
+  const originRaw = resolveOriginHeader(req)
+  if (!originRaw) {
+    return true
+  }
+
+  const hostRaw = resolveHostHeader(req)
+  return hostRaw.length > 0 && matchesHostHeader(originRaw, hostRaw)
+}
+
 function isSameOriginRequest(req: IncomingMessage): boolean {
   const originRaw = resolveOriginHeader(req)
-  const hostRaw = typeof req.headers.host === 'string' ? req.headers.host.trim() : ''
+  const hostRaw = resolveHostHeader(req)
   if (hostRaw.length === 0) {
     return false
   }
@@ -138,7 +158,7 @@ export function resolveRequestAuth(options: {
 }): RequestAuth | null {
   const bearer = normalizeBearerToken(options.req.headers.authorization)
   if (bearer && tokensEqual(bearer, options.token)) {
-    return { kind: 'bearer' }
+    return isOriginAllowedForTokenAuth(options.req) ? { kind: 'bearer' } : null
   }
 
   const cookies = parseCookies(
@@ -159,7 +179,7 @@ export function resolveRequestAuth(options: {
   if (options.allowQueryToken) {
     const queryToken = options.url.searchParams.get('token')?.trim() ?? null
     if (queryToken && tokensEqual(queryToken, options.token)) {
-      return { kind: 'query_token' }
+      return isOriginAllowedForTokenAuth(options.req) ? { kind: 'query_token' } : null
     }
   }
 
