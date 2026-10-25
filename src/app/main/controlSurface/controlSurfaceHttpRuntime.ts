@@ -283,6 +283,7 @@ export function createControlSurfaceHttpRuntime(
     desktopSyncEventSink: options.desktopSyncEventSink,
     getWebAccessPolicy: () => webAccessPolicy,
     isRuntimeClosed: () => closed,
+    dropsDirectory: resolve(options.userDataPath, 'drops'),
   })
 
   const runtime: ControlSurfaceHttpRuntime = {

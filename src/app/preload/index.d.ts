@@ -192,6 +192,8 @@ export interface OpenCoveApi {
   filesystem: {
     getPathForFile: (file: File) => string
     resolveDroppedFile?: (file: File) => Promise<FileSystemStat | null>
+    /** Web UI only: stores a dropped or pasted file on the worker and answers its path. */
+    uploadDroppedFile?: (file: File) => Promise<string>
     createDirectory: (payload: CreateDirectoryInput) => Promise<void>
     copyEntry: (payload: CopyEntryInput) => Promise<void>
     moveEntry: (payload: MoveEntryInput) => Promise<void>

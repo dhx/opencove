@@ -1,3 +1,4 @@
+import { uploadDroppedFileToWorker } from './browserFileDrop'
 import {
   normalizeReadFileBytesResult,
   type ListSystemFontsResult,
@@ -177,6 +178,9 @@ export function installBrowserOpenCoveApi(): void {
       },
     },
     filesystem: {
+      // A browser does not tell the page where a file lives; a dropped file is uploaded instead.
+      getPathForFile: () => '',
+      uploadDroppedFile: uploadDroppedFileToWorker,
       createDirectory: async payload => {
         await invokeBrowserControlSurface<void>({
           kind: 'command',
