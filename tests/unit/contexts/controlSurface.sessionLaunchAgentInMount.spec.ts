@@ -50,6 +50,7 @@ afterEach(() => {
   captureGeminiSessionDiscoveryCursorMock.mockReset()
   invokeControlSurfaceMock.mockReset()
   vi.clearAllMocks()
+  vi.unstubAllEnvs()
 })
 
 describe('control surface session.launchAgentInMount', () => {
@@ -124,134 +125,141 @@ describe('control surface session.launchAgentInMount', () => {
     expect(spawnSession).not.toHaveBeenCalled()
   })
 
-  it('passes executable overrides through remote mounted agent launches', async () => {
-    const rootPath = process.cwd()
-    const rootUri = pathToFileURL(rootPath).href
-    const registerRemoteSession = vi.fn(() => 'home-session-override')
-    const registerSessionMetadata = vi.fn()
+  it.each([
+    ['1', 'E:\\node-v22.17.0-win-x64\\node_global\\codex.cmd'],
+    [undefined, null],
+  ] as const)(
+    'forwards executable overrides to remote mounted launches only when OPENCOVE_ALLOW_LAUNCH_OVERRIDES=%s',
+    async (allowOverrides, expectedOverride) => {
+      vi.stubEnv('OPENCOVE_ALLOW_LAUNCH_OVERRIDES', allowOverrides)
+      const rootPath = process.cwd()
+      const rootUri = pathToFileURL(rootPath).href
+      const registerRemoteSession = vi.fn(() => 'home-session-override')
+      const registerSessionMetadata = vi.fn()
 
-    invokeControlSurfaceMock
-      .mockResolvedValueOnce({
-        result: {
-          ok: true,
-          value: undefined,
-        },
-      })
-      .mockResolvedValueOnce({
-        result: {
-          ok: true,
-          value: {
-            sessionId: 'remote-session-override',
-            provider: 'codex',
-            startedAt: '2026-03-27T00:00:00.000Z',
-            executionContext: {
-              projectId: null,
-              spaceId: null,
-              mountId: null,
-              targetId: null,
-              endpoint: { endpointId: 'remote-worker-1', kind: 'remote_worker' },
-              target: { scheme: 'file', rootPath, rootUri },
-              scope: { rootPath, rootUri },
-              workingDirectory: rootPath,
-            },
-            profileId: null,
-            runtimeKind: 'windows',
-            resumeSessionId: null,
-            effectiveModel: 'gpt-5.2-codex',
-            command: 'codex',
-            args: ['--dangerously-bypass-approvals-and-sandbox'],
+      invokeControlSurfaceMock
+        .mockResolvedValueOnce({
+          result: {
+            ok: true,
+            value: undefined,
           },
+        })
+        .mockResolvedValueOnce({
+          result: {
+            ok: true,
+            value: {
+              sessionId: 'remote-session-override',
+              provider: 'codex',
+              startedAt: '2026-03-27T00:00:00.000Z',
+              executionContext: {
+                projectId: null,
+                spaceId: null,
+                mountId: null,
+                targetId: null,
+                endpoint: { endpointId: 'remote-worker-1', kind: 'remote_worker' },
+                target: { scheme: 'file', rootPath, rootUri },
+                scope: { rootPath, rootUri },
+                workingDirectory: rootPath,
+              },
+              profileId: null,
+              runtimeKind: 'windows',
+              resumeSessionId: null,
+              effectiveModel: 'gpt-5.2-codex',
+              command: 'codex',
+              args: ['--dangerously-bypass-approvals-and-sandbox'],
+            },
+          },
+        })
+
+      const controlSurface = createControlSurface()
+      registerSessionHandlers(controlSurface, {
+        ...createReadyTerminalAdmissionDeps(),
+        agentProviderRegistry: createTestAgentProviderRegistry(),
+        userDataPath: '/tmp/opencove-test-user-data',
+        approvedWorkspaces: {
+          registerRoot: async () => undefined,
+          isPathApproved: async () => true,
         },
+        getPersistenceStore: async () =>
+          ({
+            readAppState: async () => ({ settings: {} }),
+          }) as never,
+        ptyRuntime: {
+          spawnSession: async () => ({ sessionId: 'unused-local-session' }),
+          write: () => undefined,
+          resize: () => undefined,
+          kill: () => undefined,
+          onData: () => () => undefined,
+          onExit: () => () => undefined,
+          attach: () => undefined,
+          detach: () => undefined,
+          snapshot: () => '',
+          startSessionStateWatcher: () => undefined,
+          registerRemoteSession,
+          dispose: () => undefined,
+        },
+        ptyStreamHub: {
+          registerSessionMetadata,
+          hasSession: () => false,
+        } as unknown as PtyStreamHub,
+        topology: {
+          resolveMountTarget: async () => ({
+            mountId: 'mount-remote',
+            projectId: 'project-remote',
+            targetId: 'target-remote',
+            endpointId: 'remote-worker-1',
+            rootPath,
+            rootUri,
+          }),
+          resolveRemoteEndpointConnection: async () => ({
+            baseUrl: 'http://127.0.0.1:7777',
+            token: 'token',
+          }),
+        } as never,
       })
 
-    const controlSurface = createControlSurface()
-    registerSessionHandlers(controlSurface, {
-      ...createReadyTerminalAdmissionDeps(),
-      agentProviderRegistry: createTestAgentProviderRegistry(),
-      userDataPath: '/tmp/opencove-test-user-data',
-      approvedWorkspaces: {
-        registerRoot: async () => undefined,
-        isPathApproved: async () => true,
-      },
-      getPersistenceStore: async () =>
-        ({
-          readAppState: async () => ({ settings: {} }),
-        }) as never,
-      ptyRuntime: {
-        spawnSession: async () => ({ sessionId: 'unused-local-session' }),
-        write: () => undefined,
-        resize: () => undefined,
-        kill: () => undefined,
-        onData: () => () => undefined,
-        onExit: () => () => undefined,
-        attach: () => undefined,
-        detach: () => undefined,
-        snapshot: () => '',
-        startSessionStateWatcher: () => undefined,
-        registerRemoteSession,
-        dispose: () => undefined,
-      },
-      ptyStreamHub: {
-        registerSessionMetadata,
-        hasSession: () => false,
-      } as unknown as PtyStreamHub,
-      topology: {
-        resolveMountTarget: async () => ({
+      const launched = await controlSurface.invoke(ctx, {
+        kind: 'command',
+        id: 'session.launchAgentInMount',
+        payload: {
           mountId: 'mount-remote',
-          projectId: 'project-remote',
-          targetId: 'target-remote',
-          endpointId: 'remote-worker-1',
-          rootPath,
-          rootUri,
-        }),
-        resolveRemoteEndpointConnection: async () => ({
-          baseUrl: 'http://127.0.0.1:7777',
-          token: 'token',
-        }),
-      } as never,
-    })
-
-    const launched = await controlSurface.invoke(ctx, {
-      kind: 'command',
-      id: 'session.launchAgentInMount',
-      payload: {
-        mountId: 'mount-remote',
-        cwdUri: rootUri,
-        prompt: '',
-        provider: 'codex',
-        mode: 'new',
-        model: 'gpt-5.2-codex',
-        executablePathOverride: 'E:\\node-v22.17.0-win-x64\\node_global\\codex.cmd',
-        cols: 132,
-        rows: 41,
-      },
-    })
-
-    expect(launched.ok).toBe(true)
-    expect(registerRemoteSession).toHaveBeenCalledWith({
-      endpointId: 'remote-worker-1',
-      remoteSessionId: 'remote-session-override',
-    })
-    expect(registerSessionMetadata).toHaveBeenCalledWith(
-      expect.objectContaining({
-        sessionId: 'home-session-override',
-        cols: 132,
-        rows: 41,
-      }),
-    )
-    expect(invokeControlSurfaceMock).toHaveBeenNthCalledWith(
-      2,
-      expect.any(Object),
-      expect.objectContaining({
-        id: 'session.launchAgent',
-        payload: expect.objectContaining({
+          cwdUri: rootUri,
+          prompt: '',
+          provider: 'codex',
+          mode: 'new',
+          model: 'gpt-5.2-codex',
           executablePathOverride: 'E:\\node-v22.17.0-win-x64\\node_global\\codex.cmd',
           cols: 132,
           rows: 41,
+        },
+      })
+
+      expect(launched.ok).toBe(true)
+      expect(registerRemoteSession).toHaveBeenCalledWith({
+        endpointId: 'remote-worker-1',
+        remoteSessionId: 'remote-session-override',
+      })
+      expect(registerSessionMetadata).toHaveBeenCalledWith(
+        expect.objectContaining({
+          sessionId: 'home-session-override',
+          cols: 132,
+          rows: 41,
         }),
-      }),
-    )
-  })
+      )
+      expect(invokeControlSurfaceMock).toHaveBeenNthCalledWith(
+        2,
+        expect.any(Object),
+        expect.objectContaining({
+          id: 'session.launchAgent',
+          payload: expect.objectContaining({
+            executablePathOverride: expectedOverride,
+            cols: 132,
+            rows: 41,
+          }),
+        }),
+      )
+    },
+  )
 
   it('passes resumeSessionId through local mounted test agent resume launches', async () => {
     const expectedRuntimeKind = process.platform === 'win32' ? 'windows' : 'posix'

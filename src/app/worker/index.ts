@@ -1,6 +1,5 @@
 import { createPiHookChannel } from '../main/controlSurface/agentHook/piHookChannel'
 import { resolve } from 'node:path'
-import { homedir } from 'node:os'
 import { registerControlSurfaceHttpServer } from '../main/controlSurface/controlSurfaceHttpServer'
 import {
   createDesktopManagedControlSurface,
@@ -24,10 +23,6 @@ import { createClaudeHookChannel } from '../main/controlSurface/agentHook/claude
 import { createCodexHookChannel } from '../main/controlSurface/agentHook/codexHookChannel'
 import { AgentProviderRegistry } from '../../contexts/agent/application/services/AgentProviderRegistry'
 import { createBuiltinAgentProviderContributions } from '../../contexts/agent/infrastructure/providers/catalog/BuiltinAgentProviderCatalog'
-import {
-  cleanupLegacyManagedHooksAtStartup,
-  reportLegacyManagedHookCleanupFailures,
-} from '../../contexts/agent/infrastructure/cleanupLegacyManagedHooksAtStartup'
 import { readRepeatedWorkerFlagValues, readWorkerFlagValue } from './workerCliArguments'
 import { CONTROL_SURFACE_SHUTDOWN_WATCHDOG_MS } from '../../shared/runtime/controlSurfaceShutdown'
 import { getRuntimeBuildIdentity } from '../../shared/runtime/runtimeBuildIdentity'
@@ -87,7 +82,6 @@ async function main(): Promise<void> {
   // can be incomplete. Hydrate the environment so git/ssh/etc behave consistently across Desktop,
   // Web UI, and remote/headless installs.
   await hydrateCliEnvironmentForAppLaunch(true)
-  reportLegacyManagedHookCleanupFailures(await cleanupLegacyManagedHooksAtStartup(homedir()))
 
   const userDataPath = readWorkerFlagValue(argv, '--user-data') ?? resolveWorkerUserDataDir()
   const bindHostname = readWorkerFlagValue(argv, '--hostname') ?? '127.0.0.1'

@@ -1,3 +1,4 @@
+import { pickTerminalAgentForwardedEnvironment } from './TerminalAgentTelemetryScripts'
 import { randomBytes } from 'node:crypto'
 import { resolveCodexInvocationArguments } from '../cli/CodexInvocationArguments'
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
@@ -463,7 +464,8 @@ function normalizeEnvironment(value: unknown): NodeJS.ProcessEnv | null {
   if (!entries.every(([, entry]) => typeof entry === 'string')) {
     return null
   }
-  return Object.fromEntries(entries) as NodeJS.ProcessEnv
+  // Older shims sent the whole shell environment; keep only what hook planning needs.
+  return pickTerminalAgentForwardedEnvironment(Object.fromEntries(entries)) as NodeJS.ProcessEnv
 }
 
 function definedEnvironment(environment: Readonly<NodeJS.ProcessEnv>): Record<string, string> {

@@ -1,5 +1,4 @@
 import type { AgentProviderId } from '../../../../shared/contracts/dto'
-import { ensureOpenCodeEmbeddedTuiConfigPath } from '../../../../contexts/agent/infrastructure/opencode/OpenCodeTuiConfig'
 
 interface OpenCodeServerBinding {
   readonly hostname: string
@@ -14,12 +13,11 @@ export async function prepareAgentSessionEnvironment(options: {
   if (options.provider !== 'opencode' || !options.opencodeServer) {
     return {}
   }
-  const tuiConfigPath = await ensureOpenCodeEmbeddedTuiConfigPath()
+  // OPENCODE_TUI_CONFIG comes from the OpenCode launch plan (a per-launch temp file).
   return {
     OPENCOVE_OPENCODE_SERVER_HOSTNAME: options.opencodeServer.hostname,
     OPENCOVE_OPENCODE_SERVER_PORT: String(options.opencodeServer.port),
     XDG_STATE_HOME: options.userDataPath.trim() || process.cwd(),
-    ...(tuiConfigPath ? { OPENCODE_TUI_CONFIG: tuiConfigPath } : {}),
   }
 }
 

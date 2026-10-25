@@ -21,5 +21,6 @@ export const enSettingsPanelAgent = {
   moveUp: 'Move up',
   moveDown: 'Move down',
   fullAccessLabel: 'Full Access Mode',
-  fullAccessHelp: 'Disable sandbox and manual approvals for agents.',
+  fullAccessHelp:
+    'Disable sandbox and manual approvals for agents. Off by default. The server can block it with OPENCOVE_AGENT_FULL_ACCESS=deny.',
 } as const

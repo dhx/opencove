@@ -6,14 +6,10 @@ import type { AgentProviderRegistry } from '../../../../contexts/agent/applicati
 import { captureGeminiSessionDiscoveryCursor } from '../../../../contexts/agent/infrastructure/cli/AgentSessionLocatorProviders'
 import {
   normalizeAgentSettings,
-  resolveAgentExecutablePathOverride,
   resolveAgentModel,
 } from '../../../../contexts/settings/domain/agentSettings'
 import { normalizePersistedAppState } from '../../../../platform/persistence/sqlite/normalize'
-import type {
-  LaunchAgentSessionInput,
-  LaunchAgentSessionResult,
-} from '../../../../shared/contracts/dto'
+import type { LaunchAgentSessionResult } from '../../../../shared/contracts/dto'
 import {
   LOCAL_AGENT_SERVER_HOSTNAME,
   reserveLoopbackPort,
@@ -39,6 +35,10 @@ import {
   logAgentLaunchInfo,
 } from '../../diagnostics/agentLaunchRuntimeDiagnostics'
 import { prepareAgentLaunch } from './prepareAgentLaunch'
+import {
+  buildForwardedLaunchAgentPayload,
+  resolveLocalAgentLaunchSecurity,
+} from './agentLaunchOverrides'
 import { rollbackAgentLaunchArtifacts } from '../../../../contexts/agent/application/services/AgentLaunchArtifactOwner'
 import {
   mergeAgentLaunchEnvironment,
@@ -112,19 +112,14 @@ export function registerSessionLaunchAgentInMountHandler(
           const agentLaunchResult = await invokeControlSurface(endpoint, {
             kind: 'command',
             id: 'session.launchAgent',
-            payload: {
+            payload: buildForwardedLaunchAgentPayload({
+              payload,
               cwd,
-              prompt: payload.prompt,
-              provider: payload.provider ?? null,
               mode,
-              model: payload.model ?? null,
-              resumeSessionId: payload.resumeSessionId ?? null,
-              env: payload.env ?? null,
-              executablePathOverride: payload.executablePathOverride ?? null,
-              agentFullAccess: payload.agentFullAccess ?? null,
-              cols: payload.cols,
-              rows: payload.rows,
-            } satisfies LaunchAgentSessionInput,
+              state: normalizePersistedAppState(
+                await (await deps.getPersistenceStore()).readAppState(),
+              ),
+            }),
           })
 
           if (!agentLaunchResult.result) {
@@ -247,10 +242,13 @@ export function registerSessionLaunchAgentInMountHandler(
 
       const provider = resolveProviderFromSettings(payload.provider ?? null, agentSettings, mode)
       const model = payload.model ?? resolveAgentModel(agentSettings, provider)
-      const executablePathOverride =
-        payload.executablePathOverride ??
-        resolveAgentExecutablePathOverride(agentSettings, provider)
-      const agentFullAccess = payload.agentFullAccess ?? agentSettings.agentFullAccess
+      const security = resolveLocalAgentLaunchSecurity({
+        payload,
+        agentSettings,
+        state: normalized,
+        provider,
+      })
+      const { agentFullAccess, executablePathOverride } = security
       logAgentLaunchInfo(
         'control-surface-mount-local-resolved-settings',
         'Resolved local mount agent launch settings.',
@@ -261,6 +259,7 @@ export function registerSessionLaunchAgentInMountHandler(
           cwd,
           modelPresent: !!model,
           executablePathOverridePresent: !!executablePathOverride,
+          ...security.diagnostics,
           agentFullAccess,
           cols: payload.cols ?? 80,
           rows: payload.rows ?? 24,
@@ -314,7 +313,7 @@ export function registerSessionLaunchAgentInMountHandler(
       const mergedEnv = mergeAgentLaunchEnvironment({
         testEnvironment: testStub?.env,
         sessionEnvironment: sessionEnv,
-        requestedEnvironment: payload.env,
+        requestedEnvironment: security.env,
         providerEnvironment: managedLaunch.plan.env,
       })
 

@@ -1,3 +1,4 @@
+import { assertApprovableWorkspaceRoot } from './workspaceHandlers'
 import { hostname } from 'node:os'
 import type { ControlSurface } from '../controlSurface'
 import { createAppError, OpenCoveAppError } from '../../../../shared/errors/appError'
@@ -43,6 +44,8 @@ export function registerTopologyHandlers(
     approvedWorkspaces: ApprovedWorkspaceStore
     endpointHealth: EndpointHealthService
     readSshConfigHosts: () => Promise<SshConfigHost[]>
+    /** Enables the workspace-root guard for local mounts (see workspace.approveRoot). */
+    userDataPath?: string
   },
 ): void {
   controlSurface.register('endpoint.list', {
@@ -368,6 +371,12 @@ export function registerTopologyHandlers(
     validate: normalizeCreateMountPayload,
     handle: async (_ctx, payload) => {
       if (payload.endpointId === 'local') {
+        if (deps.userDataPath !== undefined) {
+          await assertApprovableWorkspaceRoot(payload.rootPath, {
+            operationId: 'mount.create',
+            userDataPath: deps.userDataPath,
+          })
+        }
         await deps.approvedWorkspaces.registerRoot(payload.rootPath)
       } else {
         void deps.topology

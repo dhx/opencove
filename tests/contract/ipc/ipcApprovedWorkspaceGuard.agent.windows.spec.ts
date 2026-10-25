@@ -111,6 +111,7 @@ describe('IPC approved workspace guards on Windows', () => {
       const persistenceStore = createPersistenceStoreMock({
         settings: {
           defaultTerminalProfileId: 'powershell',
+          agentFullAccess: true,
         },
       })
 

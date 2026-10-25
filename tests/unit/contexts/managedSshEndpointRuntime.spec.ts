@@ -103,6 +103,7 @@ describe('managedSshEndpointRuntime', () => {
       '-N',
       '-L',
       '41000:127.0.0.1:39291',
+      '--',
       'ubuntu@example.com',
     ])
   })
@@ -111,6 +112,7 @@ describe('managedSshEndpointRuntime', () => {
     expect(buildSshArgs(createAccess(), ['sh', '-lc', 'printf ok'])).toEqual([
       '-p',
       '22',
+      '--',
       'ubuntu@example.com',
       'sh',
       '-lc',
@@ -128,8 +130,23 @@ describe('managedSshEndpointRuntime', () => {
       '-o',
       'AddressFamily=inet',
       '-N',
+      '--',
       'ubuntu@localhost',
     ])
+  })
+
+  it.each([
+    ['-oProxyCommand=touch /tmp/pwned', null],
+    ['example.com -oProxyCommand=x', null],
+    ['example.com\n', null],
+    ['example.com', '-oProxyCommand=x'],
+    ['example.com', 'ubuntu x'],
+  ])('refuses to build ssh args for host %j and user %j', (unsafeHost, unsafeUser) => {
+    const access = createAccess()
+    access.ssh.host = unsafeHost
+    access.ssh.username = unsafeUser
+    expect(() => buildSshArgs(access, ['true'])).toThrow(/Refusing to run ssh/)
+    expect(() => buildSshTunnelArgs(access, ['-N'])).toThrow(/Refusing to run ssh/)
   })
 
   it('requires a build identity before it can prepare a remote runtime', () => {

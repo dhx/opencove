@@ -37,7 +37,6 @@ import {
   readLastAssistantMessageFromSessionFile,
 } from '../../infrastructure/watchers/SessionLastAssistantMessage'
 import { resolveSessionFilePath } from '../../infrastructure/watchers/SessionFileResolver'
-import { ensureOpenCodeEmbeddedTuiConfigPath } from '../../infrastructure/opencode/OpenCodeTuiConfig'
 import type { PtyRuntime } from '../../../terminal/presentation/main-ipc/runtime'
 import type { ApprovedWorkspaceStore } from '../../../../contexts/workspace/infrastructure/approval/ApprovedWorkspaceStore'
 import {
@@ -58,6 +57,10 @@ import {
 import { normalizePersistedAppState } from '../../../../platform/persistence/sqlite/normalize'
 import { AgentProviderRegistry } from '../../application/services/AgentProviderRegistry'
 import { createManagedAgentLaunchPlan } from '../../application/use-cases/createManagedAgentLaunchPlan'
+import {
+  resolveAgentFullAccessPolicy,
+  resolveEffectiveAgentFullAccess,
+} from '../../application/agentLaunchPolicy'
 import { createBuiltinAgentProviderContributions } from '../../infrastructure/providers/catalog/BuiltinAgentProviderCatalog'
 import { rollbackAgentLaunchArtifacts } from '../../application/services/AgentLaunchArtifactOwner'
 import { AgentLaunchSessionRegistrationOwner } from '../../application/services/AgentLaunchSessionRegistrationOwner'
@@ -78,11 +81,6 @@ function resolveOpenCodeEmbeddedXdgStateHome(): string {
 
   const fallback = process.env['OPENCOVE_TEST_USER_DATA_DIR']?.trim()
   return fallback && fallback.length > 0 ? fallback : process.cwd()
-}
-
-function normalizeOptionalEnvValue(value: string | undefined): string | null {
-  const normalized = value?.trim()
-  return normalized && normalized.length > 0 ? normalized : null
 }
 
 async function reserveLoopbackPort(hostname: string): Promise<number> {
@@ -312,7 +310,11 @@ export function registerAgentIpcHandlers(
           prompt: normalized.prompt,
           model: normalized.model ?? null,
           resumeSessionId: normalized.resumeSessionId ?? null,
-          agentFullAccess: normalized.agentFullAccess ?? true,
+          agentFullAccess: resolveEffectiveAgentFullAccess({
+            policy: resolveAgentFullAccessPolicy(process.env),
+            setting: agentSettings.agentFullAccess,
+            requested: normalized.agentFullAccess,
+          }),
           opencodeServer,
           executablePathOverride,
           workspaceDirectory: normalized.cwd,
@@ -342,21 +344,13 @@ export function registerAgentIpcHandlers(
       const command = testStub?.command ?? launchCommand.command
       const args = testStub?.args ?? launchCommand.args
 
-      const opencodeTuiConfigPath =
-        normalized.provider === 'opencode'
-          ? (normalizeOptionalEnvValue(process.env.OPENCODE_TUI_CONFIG) ??
-            (await ensureOpenCodeEmbeddedTuiConfigPath().catch(error =>
-              rollbackAgentLaunchArtifacts(error, managedLaunch.artifacts),
-            )))
-          : null
-
       const internalSessionEnv =
         opencodeServer && normalized.provider === 'opencode'
           ? {
               OPENCOVE_OPENCODE_SERVER_HOSTNAME: opencodeServer.hostname,
               OPENCOVE_OPENCODE_SERVER_PORT: String(opencodeServer.port),
               XDG_STATE_HOME: resolveOpenCodeEmbeddedXdgStateHome(),
-              ...(opencodeTuiConfigPath ? { OPENCODE_TUI_CONFIG: opencodeTuiConfigPath } : {}),
+              // OPENCODE_TUI_CONFIG comes from the OpenCode launch plan (a per-launch temp file).
             }
           : undefined
 

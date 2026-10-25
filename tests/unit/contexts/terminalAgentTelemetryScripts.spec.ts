@@ -54,7 +54,9 @@ describe('terminal Agent private telemetry assets', () => {
     expect(terminalAgentLauncherScript).toContain(
       'const plan = await prepare(provider, executable, invocationId, userArgs);',
     )
-    expect(terminalAgentLauncherScript).toContain('arguments: userArgs, environment: process.env')
+    expect(terminalAgentLauncherScript).toContain(
+      'arguments: userArgs, environment: forwardedEnvironment(process.env)',
+    )
     expect(terminalAgentLauncherScript).toContain(
       'prepareWindows(process.argv[3], process.argv[4], process.argv.slice(5))',
     )

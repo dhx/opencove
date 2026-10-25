@@ -1,3 +1,4 @@
+import { isSafeManagedSshDestination } from '../../../../contexts/topology/domain/managedSshDestination'
 import type {
   MountDto,
   WorkerEndpointDto,
@@ -162,6 +163,10 @@ function normalizeManagedSshEndpointRecord(value: unknown): ManagedSshEndpointRe
         : null
 
   const username = normalizeNonEmptyString(value.username)
+  if (!isSafeManagedSshDestination(host, username)) {
+    // Never hand a value that ssh would parse as an option to the ssh client.
+    return null
+  }
   const remotePort = normalizePort(value.remotePort)
   const remotePlatform =
     value.remotePlatform === 'posix' || value.remotePlatform === 'windows'

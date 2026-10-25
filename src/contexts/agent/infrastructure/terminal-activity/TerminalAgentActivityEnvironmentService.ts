@@ -30,6 +30,19 @@ export interface PreparedTerminalAgentActivityEnvironment {
   dispose: () => Promise<void>
 }
 
+export const TERMINAL_AGENT_SHIMS_ENV = 'OPENCOVE_TERMINAL_AGENT_SHIMS'
+
+/**
+ * `OPENCOVE_TERMINAL_AGENT_SHIMS=0` (or `false`/`off`) leaves terminals alone: no claude/codex/pi
+ * PATH shims, no generated bash/zsh startup files, no gateway credentials in the shell.
+ */
+export function areTerminalAgentShimsEnabled(
+  env: Readonly<Record<string, string | undefined>>,
+): boolean {
+  const raw = env[TERMINAL_AGENT_SHIMS_ENV]?.trim().toLowerCase() ?? ''
+  return !(raw === '0' || raw === 'false' || raw === 'off')
+}
+
 export class TerminalAgentActivityEnvironmentService {
   private readonly inheritedPath: string
   private readonly path: PlatformPath
@@ -42,6 +55,8 @@ export class TerminalAgentActivityEnvironmentService {
       inheritedPath: string
       inheritedShell: string
       platform: NodeJS.Platform
+      /** `false` turns the shims off; terminals start with the user's normal shell and PATH. */
+      enabled?: boolean
     },
   ) {
     this.inheritedPath = options.inheritedPath
@@ -51,7 +66,7 @@ export class TerminalAgentActivityEnvironmentService {
   public async prepare(
     command: PrepareTerminalAgentActivityCommand,
   ): Promise<PreparedTerminalAgentActivityEnvironment> {
-    if (this.isWslSpawn(command)) {
+    if (this.options.enabled === false || this.isWslSpawn(command)) {
       return unchanged(command)
     }
     let stage: Extract<TerminalAgentDiagnostic, { type: 'prepare-fallback' }>['stage'] = 'assets'

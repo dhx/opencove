@@ -18,6 +18,10 @@ import type {
 } from '../../../../shared/contracts/dto'
 import { createAppError } from '../../../../shared/errors/appError'
 import { parseOptionalManagedSshPort } from '../../../../contexts/topology/domain/managedSshPort'
+import {
+  findManagedSshHostProblem,
+  findManagedSshUsernameProblem,
+} from '../../../../contexts/topology/domain/managedSshDestination'
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value)
@@ -68,6 +72,19 @@ function normalizeRequiredString(value: unknown, debugName: string): string {
   }
 
   return normalized
+}
+
+function normalizeManagedSshDestination(
+  payload: Record<string, unknown>,
+  operationId: string,
+): { host: string; username: string | null } {
+  const host = normalizeRequiredString(payload.host, `${operationId} host`)
+  const username = normalizeOptionalString(payload.username)
+  const problem = findManagedSshHostProblem(host) ?? findManagedSshUsernameProblem(username)
+  if (problem) {
+    throw createAppError('common.invalid_input', { debugMessage: `${operationId}: ${problem}` })
+  }
+  return { host, username }
 }
 
 function normalizeRequiredPort(value: unknown, debugName: string): number {
@@ -170,9 +187,8 @@ export function normalizeRegisterManagedSshEndpointPayload(
 
   return {
     displayName: normalizeOptionalString(payload.displayName),
-    host: normalizeRequiredString(payload.host, 'endpoint.registerManagedSsh host'),
+    ...normalizeManagedSshDestination(payload, 'endpoint.registerManagedSsh'),
     port: normalizeOptionalManagedSshPort(payload.port, 'endpoint.registerManagedSsh port'),
-    username: normalizeOptionalString(payload.username),
     remotePort: normalizeOptionalManagedSshPort(
       payload.remotePort,
       'endpoint.registerManagedSsh remotePort',
@@ -208,9 +224,8 @@ export function normalizeUpdateManagedSshEndpointPayload(
   return {
     endpointId: normalizeRequiredString(payload.endpointId, 'endpoint.updateManagedSsh endpointId'),
     displayName: normalizeOptionalString(payload.displayName),
-    host: normalizeRequiredString(payload.host, 'endpoint.updateManagedSsh host'),
+    ...normalizeManagedSshDestination(payload, 'endpoint.updateManagedSsh'),
     port: normalizeOptionalManagedSshPort(payload.port, 'endpoint.updateManagedSsh port'),
-    username: normalizeOptionalString(payload.username),
     remotePort,
     remotePlatform,
   }

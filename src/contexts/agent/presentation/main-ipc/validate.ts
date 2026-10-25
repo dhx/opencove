@@ -299,7 +299,7 @@ export function normalizeLaunchAgentPayload(payload: unknown): LaunchAgentInput 
     typeof record.executablePathOverride === 'string' ? record.executablePathOverride.trim() : ''
 
   const agentFullAccess =
-    typeof record.agentFullAccess === 'boolean' ? record.agentFullAccess : true
+    typeof record.agentFullAccess === 'boolean' ? record.agentFullAccess : null
 
   const cols =
     typeof record.cols === 'number' && Number.isFinite(record.cols) && record.cols > 0
@@ -332,7 +332,7 @@ export function normalizeLaunchAgentPayload(payload: unknown): LaunchAgentInput 
     resumeSessionId: resumeSessionId.length > 0 ? resumeSessionId : null,
     env,
     executablePathOverride: executablePathOverride.length > 0 ? executablePathOverride : null,
-    agentFullAccess,
+    ...(agentFullAccess !== null ? { agentFullAccess } : {}),
     cols,
     rows,
   }

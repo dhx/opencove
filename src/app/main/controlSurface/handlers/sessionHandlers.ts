@@ -7,7 +7,6 @@ import type { AgentProviderRegistry } from '../../../../contexts/agent/applicati
 import { captureGeminiSessionDiscoveryCursor } from '../../../../contexts/agent/infrastructure/cli/AgentSessionLocatorProviders'
 import {
   normalizeAgentSettings,
-  resolveAgentExecutablePathOverride,
   resolveAgentModel,
 } from '../../../../contexts/settings/domain/agentSettings'
 import { normalizePersistedAppState } from '../../../../platform/persistence/sqlite/normalize'
@@ -53,6 +52,7 @@ import {
 } from '../../diagnostics/agentLaunchRuntimeDiagnostics'
 import { registerSessionAgentWatcherHandlers } from './sessionAgentWatcherHandlers'
 import { prepareAgentLaunch } from './prepareAgentLaunch'
+import { resolveLocalAgentLaunchSecurity } from './agentLaunchOverrides'
 import { rollbackAgentLaunchArtifacts } from '../../../../contexts/agent/application/services/AgentLaunchArtifactOwner'
 import {
   mergeAgentLaunchEnvironment,
@@ -225,16 +225,20 @@ export function registerSessionHandlers(
 
       const provider = resolveProviderFromSettings(payload.provider ?? null, agentSettings, mode)
       const model = payload.model ?? resolveAgentModel(agentSettings, provider)
-      const executablePathOverride =
-        payload.executablePathOverride ??
-        resolveAgentExecutablePathOverride(agentSettings, provider)
-      const agentFullAccess = payload.agentFullAccess ?? agentSettings.agentFullAccess
+      const security = resolveLocalAgentLaunchSecurity({
+        payload,
+        agentSettings,
+        state: normalizePersistedAppState(await (await deps.getPersistenceStore()).readAppState()),
+        provider,
+      })
+      const { agentFullAccess, executablePathOverride } = security
       logAgentLaunchInfo('control-surface-resolved-settings', 'Resolved agent launch settings.', {
         provider,
         mode,
         cwd: workingDirectory,
         modelPresent: !!model,
         executablePathOverridePresent: !!executablePathOverride,
+        ...security.diagnostics,
         agentFullAccess,
         cols: payload.cols ?? 80,
         rows: payload.rows ?? 24,
@@ -286,7 +290,7 @@ export function registerSessionHandlers(
       const mergedEnv = mergeAgentLaunchEnvironment({
         testEnvironment: testStub?.env,
         sessionEnvironment: sessionEnv,
-        requestedEnvironment: payload.env,
+        requestedEnvironment: security.env,
         providerEnvironment: managedLaunch.plan.env,
       })
 
