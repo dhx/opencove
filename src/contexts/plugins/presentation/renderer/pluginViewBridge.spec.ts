@@ -16,7 +16,7 @@ const view: PluginOpenViewResult = {
     preview: false,
   },
 }
-const SESSION = '00000000-0000-4000-8000-000000000001'
+const SESSION = 'ab'.repeat(16)
 const disposers: Array<() => void> = []
 afterEach(() => {
   disposers.splice(0).forEach(dispose => dispose())
@@ -33,7 +33,10 @@ function setup(preview = false) {
     value: { controlSurface: { invoke } },
   })
   const post = vi.spyOn(frame.contentWindow!, 'postMessage').mockImplementation(() => {})
-  vi.spyOn(globalThis.crypto, 'randomUUID').mockReturnValue(SESSION)
+  vi.spyOn(globalThis.crypto, 'getRandomValues').mockImplementation(array => {
+    ;(array as Uint8Array).fill(0xab)
+    return array
+  })
   const title = vi.fn()
   const restore = vi.fn()
   const dispose = bindPluginViewBridge({

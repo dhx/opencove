@@ -14,6 +14,12 @@ const CHANNEL = 'opencove-plugin-v1'
  */
 const SANDBOXED_FRAME_ORIGIN = 'null'
 
+/** crypto.randomUUID needs a secure context; the Web UI may be served over plain http on a LAN. */
+function createViewSession(): string {
+  const bytes = globalThis.crypto.getRandomValues(new Uint8Array(16))
+  return Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('')
+}
+
 export function bindPluginViewBridge({
   view,
   getFrame,
@@ -25,7 +31,7 @@ export function bindPluginViewBridge({
   onTitleChange: (title: string) => void
   onRestore: () => void
 }): () => void {
-  const session = globalThis.crypto.randomUUID()
+  const session = createViewSession()
   let initialized = false
   let disposed = false
   let restoring = false

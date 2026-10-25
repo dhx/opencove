@@ -238,20 +238,16 @@ test.describe('Independently installed plugins', () => {
       await detail.getByRole('button', { name: 'Start preview' }).click()
       preview = detail.frameLocator('iframe')
       await expect(preview.locator('#count')).toHaveText('0', { timeout: 15_000 })
-      const enabledPreviewSource = await detail.locator('iframe').getAttribute('src')
+      // A preview runs the plugin's code, so disabling the plugin stops it and offers no new one.
       await detail.getByTestId(`settings-plugin-enabled-${pluginId}`).click()
       await expect(detail.getByTestId(`settings-plugin-enabled-${pluginId}`)).not.toBeChecked()
-      await expect(detail.locator('iframe')).not.toHaveAttribute('src', enabledPreviewSource!)
-      await expect(preview.locator('#invoke')).toBeEnabled({ timeout: 15_000 })
-      await clickPluginControl(preview.locator('#invoke'))
-      await expect(preview.locator('#backend-result')).toHaveAttribute(
-        'data-iso',
-        '2030-01-01T12:34:56.000Z',
-      )
-      const disabledPreviewSource = await detail.locator('iframe').getAttribute('src')
+      await expect(detail.locator('iframe')).toHaveCount(0)
+      await expect(detail.getByTestId('plugin-node-preview')).toHaveCount(0)
+      await expect(detail).toContainText('Enable the plugin to preview it.')
       await detail.getByTestId(`settings-plugin-enabled-${pluginId}`).click()
       await expect(detail.getByTestId(`settings-plugin-enabled-${pluginId}`)).toBeChecked()
-      await expect(detail.locator('iframe')).not.toHaveAttribute('src', disabledPreviewSource!)
+      await detail.getByRole('button', { name: 'Start preview' }).click()
+      preview = detail.frameLocator('iframe')
       await expect(preview.locator('#invoke')).toBeEnabled({ timeout: 15_000 })
       await clickPluginControl(preview.locator('#invoke'))
       await expect(preview.locator('#backend-result')).toHaveAttribute(

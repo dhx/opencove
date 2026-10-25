@@ -120,9 +120,14 @@ describe('independent plugin control surface and asset leases', () => {
           expect(response.headers.get('referrer-policy')).toBe('no-referrer')
           const csp = response.headers.get('content-security-policy') ?? ''
           expect(csp).not.toMatch(/style-src[^;]*unsafe-inline/)
-          // Views reach only their own files and inline data, never arbitrary https hosts.
-          expect(csp).not.toMatch(/https:|wss?:/)
-          expect(csp).toContain("connect-src 'self'")
+          // Views reach only their own files and inline data, never arbitrary hosts: no bare scheme
+          // sources, and the asset host named explicitly (WebKit's 'self' matches nothing in a sandbox).
+          expect(csp).not.toMatch(/(^|\s)(https?|wss?):(?=[\s;]|$)/)
+          const assetHost = new URL(base).host
+          expect(csp).toContain(
+            `connect-src 'self' http://${assetHost} https://${assetHost} ws://${assetHost} wss://${assetHost}`,
+          )
+          expect(csp).toContain(`script-src 'self' http://${assetHost} https://${assetHost};`)
           // Wherever a plugin document is opened, it runs in an opaque origin, never the Web UI's.
           expect(csp).toMatch(/(^|; )sandbox allow-scripts/)
           expect(csp).not.toContain('allow-same-origin')
