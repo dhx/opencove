@@ -104,7 +104,7 @@ Disabled or missing plugins leave recoverable windows instead of deleting nodes.
 
 A detail preview uses temporary storage and a separate backend instance. It
 must present honest sample content and must not change workspace data. A preview
-is not a separate installation.
+is not a separate installation, and it runs only while the plugin is enabled.
 
 ## Scope and compatibility
 

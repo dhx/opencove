@@ -126,6 +126,8 @@ function createWindow(): void {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: !disableRendererSandboxForTests,
+      // Electron's spellchecker downloads Hunspell dictionaries from Google's CDN.
+      spellcheck: false,
       ...(keepRendererActiveInBackground ? { backgroundThrottling: false } : {}),
     },
   })

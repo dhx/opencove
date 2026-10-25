@@ -20,6 +20,22 @@ export const FORBIDDEN = [
   { marker: /datadoghq\.com|browser-intake-datadoghq/, why: 'Datadog' },
   { marker: /google-analytics\.com|googletagmanager\.com/, why: 'Google Analytics' },
   { marker: /crashReporter\.start\(/, why: 'Electron crash reporter' },
+  // Things our builds removed (PR "no phone home"): each must stay gone.
+  { marker: /["']electron-updater["']/, why: 'Electron auto-update against GitHub Releases' },
+  {
+    marker: /raw\.githubusercontent\.com\/google-gemini/,
+    why: 'Gemini model list fetched from GitHub',
+  },
+  { marker: /DeadWaveWave\/opencove\/issues\/new/, why: "issue reports to upstream's tracker" },
+  {
+    marker: /DeadWaveWave\/opencove\/releases\/(download|latest)/,
+    why: "managed SSH runtime downloaded from upstream's releases by default",
+  },
+  {
+    marker: /allow-scripts allow-same-origin allow-popups allow-downloads allow-forms/,
+    why: "plugin views sandboxed with the Web UI's own origin",
+  },
+  { marker: /connect-src 'self' https:/, why: 'plugin views allowed to connect to any https host' },
 ]
 
 function* files(dir) {

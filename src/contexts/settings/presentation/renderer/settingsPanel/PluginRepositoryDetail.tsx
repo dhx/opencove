@@ -139,6 +139,7 @@ export function PluginRepositoryDetail({
             {details.readme ? (
               <PluginReadme
                 markdown={details.readme}
+                allowRemoteImages
                 resolveUrl={(url, kind) => repositoryMarkdownUrl(details, url, kind)}
               />
             ) : (

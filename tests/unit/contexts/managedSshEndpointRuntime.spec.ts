@@ -8,6 +8,7 @@ import {
   buildPosixBootstrapScript,
   buildSshArgs,
   buildSshTunnelArgs,
+  buildWindowsBootstrapScript,
   ManagedSshBootstrapError,
 } from '../../../src/app/main/controlSurface/topology/managedSshRuntimeSupport'
 
@@ -79,21 +80,43 @@ describe('managedSshEndpointRuntime', () => {
     vi.unstubAllEnvs()
   })
 
-  it('builds installer URLs that match stable and nightly release asset names', () => {
-    expect(buildInstallerAssetUrl('posix', '0.2.1')).toBe(
-      'https://github.com/DeadWaveWave/opencove/releases/download/v0.2.1/opencove-install-v0.2.1.sh',
-    )
-    expect(buildInstallerAssetUrl('windows', '0.2.1-nightly.20260811.1')).toBe(
-      'https://github.com/DeadWaveWave/opencove/releases/download/v0.2.1-nightly.20260811.1/opencove-install-v0.2.1-nightly.20260811.1.ps1',
-    )
-    expect(buildInstallerAssetUrl('posix', null)).toBe(
-      'https://github.com/DeadWaveWave/opencove/releases/latest/download/opencove-install.sh',
-    )
+  it('has no default release download and uses only the configured release source', () => {
+    vi.stubEnv('OPENCOVE_RELEASE_BASE_URL', '')
+    expect(buildInstallerAssetUrl('posix')).toBeNull()
+    expect(buildInstallerAssetUrl('windows')).toBeNull()
 
-    vi.stubEnv('OPENCOVE_RELEASE_BASE_URL', 'https://releases.example.test/custom')
-    expect(buildInstallerAssetUrl('posix', '0.2.1')).toBe(
+    vi.stubEnv('OPENCOVE_RELEASE_BASE_URL', 'https://releases.example.test/custom/')
+    expect(buildInstallerAssetUrl('posix')).toBe(
       'https://releases.example.test/custom/opencove-install.sh',
     )
+    expect(buildInstallerAssetUrl('windows')).toBe(
+      'https://releases.example.test/custom/opencove-install.ps1',
+    )
+  })
+
+  it('fails with a clear message instead of downloading when no release source is configured', () => {
+    const posix = buildPosixBootstrapScript(createAccess(), {
+      devRepoRoot: null,
+      runtimeBuild: runtimeBuildFixture,
+      installerUrl: null,
+      reinstallRuntime: false,
+    })
+    const windows = buildWindowsBootstrapScript(createAccess(), {
+      runtimeBuild: runtimeBuildFixture,
+      installerUrl: null,
+      reinstallRuntime: false,
+    })
+
+    for (const script of [posix, windows]) {
+      expect(script).toContain('[opencove-bootstrap:installer_unavailable]')
+      expect(script).toContain('OPENCOVE_RELEASE_BASE_URL')
+      expect(script).toContain('OPENCOVE_MANAGED_SSH_ARTIFACT_DIR')
+      expect(script).not.toContain('curl -fsSL')
+      expect(script).not.toContain('Invoke-WebRequest')
+      expect(script).not.toContain('github.com')
+      // An already installed runtime still starts without any download.
+      expect(script).toContain('runtime prepare')
+    }
   })
 
   it('puts tunnel options before the SSH destination for real OpenSSH', () => {

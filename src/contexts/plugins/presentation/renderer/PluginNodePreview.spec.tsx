@@ -19,6 +19,12 @@ describe('PluginNodePreview declarations', () => {
     render(<PluginNodePreview pluginId={examplePlugin.id} />)
     expect(screen.getByTestId('declared-preview')).toBeVisible()
   })
+  it('does not start a preview for a disabled plugin', () => {
+    vi.spyOn(registry, 'usePluginManifest').mockReturnValue({ ...examplePlugin, enabled: false })
+    render(<PluginNodePreview pluginId={examplePlugin.id} />)
+    expect(screen.queryByTestId('declared-preview')).toBeNull()
+    expect(screen.getByText('Enable the plugin to preview it.')).toBeVisible()
+  })
   it.each([null, { ...examplePlugin, hasPreview: false }])(
     'never starts a runtime as a fallback for an unavailable preview',
     plugin => {

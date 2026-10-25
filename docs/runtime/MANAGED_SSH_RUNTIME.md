@@ -43,6 +43,11 @@ Managed launchers live under the deployment state directory, separately from an 
 global `opencove` command. Shared immutable artifacts do not imply shared profiles or credentials.
 Public launchers are replaced atomically after verification. Installation does not require a Windows
 symlink or administrator privileges.
+This build has no default release source: it never downloads from upstream's GitHub releases. Set
+`OPENCOVE_RELEASE_BASE_URL` (a release download URL holding `opencove-install.sh`/`.ps1`, the archives
+and `SHA256SUMS.txt`) or `OPENCOVE_MANAGED_SSH_ARTIFACT_DIR` (a local runtime bundle) for the Worker.
+Without either, a host that already runs the matching runtime still connects; one that needs an install
+fails with `installer_unavailable` and names both variables.
 If the remote host cannot download a pinned release, the connecting host downloads that same archive,
 checks it, and transfers it over SSH. Partial local downloads are removed; checksum failures never
 fall back to an unverified build.

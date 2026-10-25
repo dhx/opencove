@@ -291,7 +291,8 @@ export class PluginInstallationManager {
       if (!definition) {
         throw new Error('Plugin does not provide a window.')
       }
-      if (!input.preview && (!runtime.record.enabled || runtime.error)) {
+      // Previews run the plugin's code too, so they need an enabled plugin like any other view.
+      if (!runtime.record.enabled || runtime.error) {
         throw new Error(runtime.error ?? 'Plugin is disabled.')
       }
       if (input.preview && !runtime.record.package.preview) {

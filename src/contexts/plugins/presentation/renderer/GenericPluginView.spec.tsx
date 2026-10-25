@@ -141,7 +141,10 @@ describe('generic plugin view leases', () => {
     )
     expect(screen.getByTitle('Lifecycle')).toHaveAttribute(
       'sandbox',
-      'allow-scripts allow-same-origin allow-popups allow-downloads allow-forms',
+      'allow-scripts allow-popups allow-downloads allow-forms',
+    )
+    expect(screen.getByTitle('Lifecycle').getAttribute('sandbox')).not.toContain(
+      'allow-same-origin',
     )
     rerender(
       <GenericPluginView

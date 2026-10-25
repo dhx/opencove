@@ -13,6 +13,7 @@ import type { ControlSurfaceRemoteEndpointResolver } from '@app/main/controlSurf
 import {
   buildGitHubIssueUrl,
   buildIssueReportDocument,
+  ISSUE_REPORT_NEW_ISSUE_URL,
   defaultIssueReportTitle,
   resolveIncludedDiagnostics,
 } from '../../application/IssueReportDocument'
@@ -100,11 +101,7 @@ export function createIssueReportService(deps: {
 
   const openGithubIssue = async (githubIssueUrl: string): Promise<void> => {
     const parsed = new URL(githubIssueUrl)
-    if (
-      parsed.protocol !== 'https:' ||
-      parsed.hostname !== 'github.com' ||
-      parsed.pathname !== '/DeadWaveWave/opencove/issues/new'
-    ) {
+    if (`${parsed.origin}${parsed.pathname}` !== ISSUE_REPORT_NEW_ISSUE_URL) {
       throw createAppError('common.invalid_input', { debugMessage: 'Invalid GitHub issue URL.' })
     }
 

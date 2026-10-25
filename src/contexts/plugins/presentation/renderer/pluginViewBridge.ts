@@ -6,26 +6,33 @@ import { pluginErrorMessage } from './pluginErrorMessage'
 
 const CHANNEL = 'opencove-plugin-v1'
 
+/**
+ * Plugin view frames are sandboxed without allow-same-origin, so their documents have an opaque origin:
+ * messages from them carry the origin "null" and messages to them cannot name a target origin. The frame
+ * identity (event.source) plus a per-view session handed out once, in the first init, authenticate
+ * requests, so a page the frame later navigates to (also "null") cannot act for the plugin.
+ */
+const SANDBOXED_FRAME_ORIGIN = 'null'
+
 export function bindPluginViewBridge({
   view,
-  url,
   getFrame,
   onTitleChange,
   onRestore,
 }: {
   view: PluginOpenViewResult
-  url: string
   getFrame: () => HTMLIFrameElement | null
   onTitleChange: (title: string) => void
   onRestore: () => void
 }): () => void {
-  const origin = new URL(url).origin
+  const session = globalThis.crypto.randomUUID()
+  let initialized = false
   let disposed = false
   let restoring = false
   let titleUpdates: Promise<unknown> = Promise.resolve()
   const post = (message: Record<string, unknown>) => {
     if (!disposed && !restoring) {
-      getFrame()?.contentWindow?.postMessage({ channel: CHANNEL, ...message }, origin)
+      getFrame()?.contentWindow?.postMessage({ channel: CHANNEL, ...message }, '*')
     }
   }
   const invoke = (method: string, payload: Record<string, unknown>) =>
@@ -57,7 +64,7 @@ export function bindPluginViewBridge({
       disposed ||
       restoring ||
       event.source !== getFrame()?.contentWindow ||
-      event.origin !== origin
+      event.origin !== SANDBOXED_FRAME_ORIGIN
     ) {
       return
     }
@@ -69,13 +76,24 @@ export function bindPluginViewBridge({
     if (message.channel !== CHANNEL) {
       return
     }
+    if (message.type === 'ready') {
+      if (initialized) {
+        return
+      }
+      initialized = true
+      post({
+        type: 'init',
+        session,
+        context: { ...view.context, apiVersion: 1, ...pluginThemeContext() },
+      })
+      return
+    }
+    if (message.session !== session) {
+      return
+    }
     if (message.type === 'restore') {
       restoring = true
       onRestore()
-      return
-    }
-    if (message.type === 'ready') {
-      post({ type: 'init', context: { ...view.context, apiVersion: 1, ...pluginThemeContext() } })
       return
     }
     if (message.type !== 'request' || typeof message.id !== 'string' || message.id.length > 128) {

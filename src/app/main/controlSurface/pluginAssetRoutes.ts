@@ -2,6 +2,25 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { PluginInstallationManager } from '../../../contexts/plugins/application/PluginInstallationManager'
 import { PLUGIN_BRIDGE_SCRIPT } from '../../../contexts/plugins/infrastructure/pluginBridgeScript'
 
+/**
+ * Policy for every plugin asset. `sandbox` puts any plugin document into an opaque origin wherever it is
+ * opened (the plugin view iframe, a website window, a top-level tab), so plugin script never runs with
+ * the Web UI's origin. Views reach only their own files and inline data, not arbitrary hosts.
+ */
+export const PLUGIN_ASSET_CONTENT_SECURITY_POLICY = [
+  "default-src 'self'",
+  "script-src 'self'",
+  "style-src 'self'",
+  "img-src 'self' data: blob:",
+  "media-src 'self' blob:",
+  "connect-src 'self'",
+  "font-src 'self' data:",
+  "object-src 'none'",
+  "base-uri 'none'",
+  "form-action 'none'",
+  'sandbox allow-scripts allow-popups allow-downloads allow-forms',
+].join('; ')
+
 export async function tryHandlePluginAssetRoute(input: {
   req: IncomingMessage
   res: ServerResponse
@@ -19,6 +38,7 @@ export async function tryHandlePluginAssetRoute(input: {
   res.setHeader('cache-control', 'no-store')
   res.setHeader('referrer-policy', 'no-referrer')
   res.setHeader('x-content-type-options', 'nosniff')
+  res.setHeader('content-security-policy', PLUGIN_ASSET_CONTENT_SECURITY_POLICY)
   if (!url.pathname.startsWith('/plugin-assets/') || !token || !plugins.hasResourceToken(token)) {
     res.statusCode = 404
     res.end()
@@ -54,6 +74,9 @@ export async function tryHandlePluginAssetRoute(input: {
       return true
     }
     res.setHeader('content-type', resource.contentType)
+    // Views run in a sandboxed frame with an opaque origin, so their module scripts, fonts and fetches of
+    // their own files are cross-origin (CORS) requests. Without credentials: the token is the capability.
+    res.setHeader('access-control-allow-origin', '*')
     let body = Buffer.from(resource.body)
     if (resource.contentType.startsWith('text/html')) {
       const bridge = `<script src="/plugin-assets/${token}/__opencove_bridge.js"></script>`
@@ -62,21 +85,6 @@ export async function tryHandlePluginAssetRoute(input: {
         /<head(?:\s[^>]*)?>/i.test(html)
           ? html.replace(/<head(?:\s[^>]*)?>/i, head => `${head}${bridge}`)
           : `${bridge}${html}`,
-      )
-      res.setHeader(
-        'content-security-policy',
-        [
-          "default-src 'self'",
-          "script-src 'self'",
-          "style-src 'self'",
-          "img-src 'self' data: blob: https:",
-          "media-src 'self' blob: https:",
-          "connect-src 'self' https: ws: wss:",
-          "font-src 'self' data: https:",
-          "object-src 'none'",
-          "base-uri 'none'",
-          "form-action 'none'",
-        ].join('; '),
       )
     }
     res.setHeader('content-length', body.length)

@@ -55,6 +55,14 @@ process contains crashes and permits lifecycle management; it is not a security
 sandbox. App renderers retain context isolation and no Node integration. UI
 resources use their own response CSP; the application's CSP is not weakened.
 
+A view document runs sandboxed in an opaque origin (no `allow-same-origin`, and a
+CSP `sandbox` directive on every plugin asset), never in the Web UI's origin. It
+reaches OpenCove only through the message bridge (`window.opencovePlugin`), so it
+cannot script the app or call the control surface with the user's session. It has
+no cookies, `localStorage` or IndexedDB: persist through `opencovePlugin.storage`.
+Its CSP allows its own files plus `data:`/`blob:` media, images and fonts; it does
+not load or connect to other hosts.
+
 ## Invariants
 
 1. Installation mutations have one serialized owner. Child health and renderer

@@ -11,10 +11,6 @@ vi.mock('electron', () => ({
   },
 }))
 
-vi.mock('electron-updater', () => ({
-  autoUpdater: {},
-}))
-
 type ListenerMap = {
   'checking-for-update': Array<() => void>
   'update-available': Array<(info: UpdateInfo) => void>
@@ -175,5 +171,25 @@ describe('AppUpdateService', () => {
 
     expect(service.getState().status).toBe('error')
     expect(service.getState().message).toBe('Unable to read the update feed from GitHub Releases.')
+  })
+
+  it('reports updates as unsupported by default and never checks, even when packaged', async () => {
+    const driver = createDriver()
+    const { createAppUpdateService, APP_UPDATES_OFF_MESSAGE } =
+      await import('../../../src/contexts/update/infrastructure/main/AppUpdateService')
+    const service = createAppUpdateService(driver)
+
+    expect(service.getState().status).toBe('unsupported')
+    expect(service.getState().policy).toBe('off')
+
+    const configured = await service.configure({ policy: 'auto', channel: 'stable' })
+    await service.checkForUpdates()
+    await service.downloadUpdate()
+
+    expect(configured.status).toBe('unsupported')
+    expect(configured.message).toBe(APP_UPDATES_OFF_MESSAGE)
+    expect(driver.configure).not.toHaveBeenCalled()
+    expect(driver.checkForUpdates).not.toHaveBeenCalled()
+    expect(driver.downloadUpdate).not.toHaveBeenCalled()
   })
 })
