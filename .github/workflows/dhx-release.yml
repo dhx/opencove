@@ -1,0 +1,151 @@
+# Our own OpenCove server releases (docs/dhx/RELEASES.md). Builds opencove-server-linux-x64.tar.gz from
+# this fork with a checksum-verified Node runtime, pinned build images and pinned actions, runs upstream's
+# cheap gates and our own release checks, and publishes a GitHub release with checksums, an SBOM and
+# build provenance.
+#
+# Tags are dhx/v<version> (e.g. dhx/v0.4.1-dhx-001), so upstream's release.yml (v*) never runs for them.
+# A pull request or a manual run builds and checks without publishing.
+name: dhx release
+
+on:
+  push:
+    tags: ['dhx/v*']
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to stamp, e.g. 0.4.1-dhx-001 (a manual run only builds and checks)'
+        required: true
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: '22.23.4'
+  NODE_SHA256: '1805bcd35e6815559bd2eb97db438d3fdb0eb3a5e6a977b7c1badca76337e9ce' # node-v22.23.4-linux-x64.tar.xz, nodejs.org SHASUMS256.txt
+  NATIVE_BUILD_IMAGE: 'quay.io/pypa/manylinux_2_28_x86_64@sha256:e2808351a165aa85913d79f1f8457b4f6d74047b47fba07b5b9a5e6c0055a017'
+  SMOKE_IMAGE: 'debian:bookworm-slim@sha256:7ff6ba31527b9e336162fa061746c366c4b2032f4d2cff2078bea43f78efe3f8'
+  PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Version
+        id: version
+        env:
+          REF_NAME: ${{ github.ref_name }}
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          case "$REF_NAME" in
+            dhx/v*) version="${REF_NAME#dhx/v}" ;;
+            *) version="${INPUT_VERSION:-0.0.0-dhx-000}" ;; # a pull request: a trial build
+          esac
+          if ! printf '%s' "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+-dhx-[0-9]{3}$'; then
+            echo "version must look like 0.4.1-dhx-001, not $version" >&2; exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Node runtime (verified)
+        run: |
+          curl -fsSLo node.tar.xz "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-x64.tar.xz"
+          echo "${NODE_SHA256}  node.tar.xz" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/node" && tar -xJf node.tar.xz -C "$RUNNER_TEMP/node" --strip-components=1 && rm node.tar.xz
+          echo "$RUNNER_TEMP/node/bin" >> "$GITHUB_PATH"
+          echo "OPENCOVE_NODE_EXECUTABLE=$RUNNER_TEMP/node/bin/node" >> "$GITHUB_ENV"
+
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
+        with:
+          version: 9.6.0
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Stamp the version
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          npm pkg set version="$VERSION"
+          # A stable (non-nightly) version needs release notes of its own; ours are upstream's latest.
+          latest="$(ls build/release-notes/stable/ | sort -V | tail -n1)"
+          jq --arg v "$VERSION" '.version = $v' "build/release-notes/stable/$latest" > "build/release-notes/stable/v$VERSION.json"
+
+      - name: Gates (upstream's cheap checks)
+        run: |
+          pnpm secrets:scan
+          pnpm lint
+          pnpm format:check
+          pnpm check
+          pnpm test -- --run
+
+      - name: Build the server bundle
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+          OPENCOVE_NATIVE_BUILD_IMAGE: ${{ env.NATIVE_BUILD_IMAGE }}
+        run: pnpm build:standalone
+
+      - name: Collect
+        run: |
+          mkdir -p release
+          cp dist/opencove-server-linux-x64.tar.gz release/
+          (cd release && sha256sum opencove-server-linux-x64.tar.gz > SHA256SUMS.txt && cat SHA256SUMS.txt)
+
+      - name: Our checks (what the bundle contains, what it reaches)
+        run: |
+          mkdir -p extracted && tar -xzf release/opencove-server-linux-x64.tar.gz -C extracted
+          node scripts/dhx/check-release-bundle.mjs "$(dirname "$(find extracted -maxdepth 2 -type d -name app | head -n1)")"
+          docker run --rm --network none -v "$PWD:/workspace:ro" -w /workspace "$SMOKE_IMAGE" \
+            sh scripts/dhx/egress-smoke.sh /workspace/release/opencove-server-linux-x64.tar.gz
+
+      - name: Upstream's container smoke test
+        run: |
+          docker run --rm -v "$PWD:/workspace:ro" -w /workspace "$SMOKE_IMAGE" \
+            sh scripts/smoke-standalone-node-runtime.sh /workspace/release/opencove-server-linux-x64.tar.gz
+
+      - name: SBOM
+        uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
+        with:
+          path: extracted
+          format: spdx-json
+          output-file: release/opencove-server-linux-x64.spdx.json
+          upload-artifact: false
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: opencove-server-${{ steps.version.outputs.version }}
+          path: release/
+          if-no-files-found: error
+
+  publish:
+    if: startsWith(github.ref, 'refs/tags/dhx/v')
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: opencove-server-${{ needs.build.outputs.version }}
+          path: release
+
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: release/opencove-server-linux-x64.tar.gz
+
+      - name: Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+          VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          gh release create "$TAG" release/* --repo "$GITHUB_REPOSITORY" --title "OpenCove $VERSION" \
+            --notes "Server build of this fork at ${GITHUB_SHA}. Verify: sha256sum -c SHA256SUMS.txt, and gh attestation verify opencove-server-linux-x64.tar.gz --repo ${GITHUB_REPOSITORY}."
