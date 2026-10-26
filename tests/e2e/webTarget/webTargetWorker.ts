@@ -1,5 +1,6 @@
 import { spawn, type ChildProcess } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
+import { readFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { createInterface } from 'node:readline'
 import path from 'node:path'
@@ -14,11 +15,14 @@ const repoRoot = path.resolve(__dirname, '../../../')
 const WORKER_READY_TIMEOUT_MS = 45_000
 const WORKER_STOP_TIMEOUT_MS = 5_000
 const WORKER_LOG_TAIL_LINES = 40
+// src/shared/constants/controlSurface.ts
+const WORKER_CONNECTION_FILE = 'worker-control-surface.json'
 
 export interface StartedWebTargetWorker {
   baseUrl: string
   token: string
-  process: ChildProcess
+  /** Null when the launch attached to a worker the test started itself (worker-client specs). */
+  process: ChildProcess | null
   stop: () => Promise<void>
   logTail: () => string
 }
@@ -90,11 +94,44 @@ function resolveWorkerCommand(): { command: string; workerPath: string; cwd: str
   }
 }
 
+// Worker-client specs start their own worker on the user data dir and then launch the app, which
+// connects to it (OPENCOVE_WORKER_CLIENT). The Web UI equivalent is to open that worker's Web UI.
+async function findRunningWorker(
+  userDataDir: string,
+): Promise<{ baseUrl: string; token: string } | null> {
+  try {
+    const raw = await readFile(path.join(userDataDir, WORKER_CONNECTION_FILE), 'utf8')
+    const info = JSON.parse(raw) as {
+      hostname?: unknown
+      port?: unknown
+      token?: unknown
+      pid?: unknown
+    }
+    if (
+      typeof info.hostname !== 'string' ||
+      typeof info.port !== 'number' ||
+      typeof info.token !== 'string' ||
+      typeof info.pid !== 'number'
+    ) {
+      return null
+    }
+    process.kill(info.pid, 0)
+    return { baseUrl: `http://${info.hostname}:${info.port}`, token: info.token }
+  } catch {
+    return null
+  }
+}
+
 export async function startWebTargetWorker(options: {
   userDataDir: string
   approvedRoots: string[]
   env: Record<string, string>
 }): Promise<StartedWebTargetWorker> {
+  const running = await findRunningWorker(options.userDataDir)
+  if (running) {
+    return { ...running, process: null, stop: async () => undefined, logTail: () => '' }
+  }
+
   const token = randomBytes(24).toString('hex')
   const { command, workerPath, cwd } = resolveWorkerCommand()
   const args = [

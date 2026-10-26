@@ -22,6 +22,17 @@ const testAgentStubScriptPath = path.join(repoRoot, 'scripts', 'test-agent-sessi
 const E2E_VIEWPORT = { width: 1440, height: 900 }
 const WEB_UI_LOAD_TIMEOUT_MS = 45_000
 
+// Specs serve test websites from 127.0.0.1. The fork's Web UI refuses to embed a site on its own host
+// (cookies are not isolated by port), so the UI is opened as `localhost`: a different host, as the
+// desktop app's own origin is too.
+function resolvePageBaseUrl(workerBaseUrl: string): string {
+  const url = new URL(workerBaseUrl)
+  if (url.hostname === '127.0.0.1') {
+    url.hostname = 'localhost'
+  }
+  return url.origin
+}
+
 export function isWebE2ETarget(): boolean {
   return process.env['OPENCOVE_E2E_TARGET']?.trim().toLowerCase() === 'web'
 }
@@ -134,10 +145,13 @@ export async function launchWebApp(
 
     const page = context.pages()[0] ?? (await context.newPage())
     const ticket = await issueWebSessionTicket(worker.baseUrl, worker.token)
-    await page.goto(`${worker.baseUrl}/auth/claim?ticket=${encodeURIComponent(ticket)}`, {
-      waitUntil: 'domcontentloaded',
-      timeout: WEB_UI_LOAD_TIMEOUT_MS,
-    })
+    await page.goto(
+      `${resolvePageBaseUrl(worker.baseUrl)}/auth/claim?ticket=${encodeURIComponent(ticket)}`,
+      {
+        waitUntil: 'domcontentloaded',
+        timeout: WEB_UI_LOAD_TIMEOUT_MS,
+      },
+    )
     await page.waitForFunction(() => Boolean(globalThis.window?.opencoveApi), null, {
       timeout: WEB_UI_LOAD_TIMEOUT_MS,
     })
@@ -148,6 +162,7 @@ export async function launchWebApp(
       page: () => page,
       workerProcess: worker.process,
       userDataDir,
+      env,
     })
     return { electronApp, window: page }
   } catch (error) {

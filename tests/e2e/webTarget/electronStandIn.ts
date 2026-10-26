@@ -9,8 +9,10 @@ export interface ElectronStandInTarget {
   close: () => Promise<void>
   context: () => BrowserContext | null
   page: () => Page
-  workerProcess: ChildProcess
+  workerProcess: ChildProcess | null
   userDataDir: string
+  /** The environment the worker runs with; `process.env` of the stand-in main process. */
+  env: Record<string, string>
 }
 
 function electronOnly(what: string): Error {
@@ -37,34 +39,53 @@ function strictRecord<T extends object>(name: string, members: T): T {
 // `electronApp.evaluate()` run in an isolated VM context that holds only these, so code meant for the
 // main process can never touch the test runner's own globals; anything else fails as Electron-only.
 function createElectronModules(target: ElectronStandInTarget, pending: Promise<unknown>[]) {
-  const track = <T>(promise: Promise<T>): Promise<T> => {
-    pending.push(promise.catch(() => undefined))
-    return promise
+  // Electron's calls are synchronous; here each becomes a page operation, run in call order.
+  let queue: Promise<unknown> = Promise.resolve()
+  const enqueue = <T>(operation: () => Promise<T>): Promise<T> => {
+    const next = queue.then(operation)
+    queue = next.catch(() => undefined)
+    pending.push(queue)
+    return next
   }
-  const viewport = () => target.page().viewportSize() ?? { width: 1440, height: 900 }
-  const resize = (width: number, height: number) =>
-    track(target.page().setViewportSize({ width: Math.round(width), height: Math.round(height) }))
+  const initial = target.page().viewportSize() ?? { width: 1440, height: 900 }
+  const size = { width: initial.width, height: initial.height }
+  const resize = (width: number, height: number) => {
+    size.width = Math.round(width)
+    size.height = Math.round(height)
+    const requested = { ...size }
+    void enqueue(() => target.page().setViewportSize(requested))
+  }
 
   const browserWindow = strictRecord('BrowserWindow', {
     isDestroyed: () => target.page().isClosed(),
-    getContentSize: () => [viewport().width, viewport().height],
-    getSize: () => [viewport().width, viewport().height],
+    isVisible: () => !target.page().isClosed(),
+    getContentSize: () => [size.width, size.height],
+    getSize: () => [size.width, size.height],
+    getBounds: () => ({ x: 0, y: 0, width: size.width, height: size.height }),
     setContentSize: resize,
     setSize: resize,
+    setBounds: (bounds: { width?: number; height?: number }) =>
+      resize(bounds.width ?? size.width, bounds.height ?? size.height),
   })
 
   const clipboard = strictRecord('clipboard', {
-    readText: () => track(target.page().evaluate(async () => await navigator.clipboard.readText())),
-    writeText: (text: string) =>
-      track(
+    readText: () =>
+      enqueue(() => target.page().evaluate(async () => await navigator.clipboard.readText())),
+    writeText: (text: string) => {
+      void enqueue(() =>
         target.page().evaluate(async value => await navigator.clipboard.writeText(value), text),
-      ),
-    clear: () => track(target.page().evaluate(async () => await navigator.clipboard.writeText(''))),
+      )
+    },
+    clear: () => {
+      void enqueue(() =>
+        target.page().evaluate(async () => await navigator.clipboard.writeText('')),
+      )
+    },
   })
 
   const app = strictRecord('app', {
     quit: () => {
-      void track(target.close())
+      void enqueue(() => target.close())
     },
     getPath: (name: string) => {
       if (name === 'userData') {
@@ -96,7 +117,10 @@ async function runInStandIn(
 
   const pending: Promise<unknown>[] = []
   const modules = createElectronModules(target, pending)
-  const isolated = vm.runInNewContext(`(${fn.toString()})`, Object.create(null)) as (
+  const sandbox = Object.assign(Object.create(null) as Record<string, unknown>, {
+    process: strictRecord('process', { env: { ...target.env }, platform: process.platform }),
+  })
+  const isolated = vm.runInNewContext(`(${fn.toString()})`, sandbox) as (
     first: unknown,
     second: unknown,
   ) => unknown
@@ -120,7 +144,12 @@ export function createElectronStandIn(target: ElectronStandInTarget): ElectronAp
 
   const members = {
     close,
-    process: () => target.workerProcess,
+    process: () => {
+      if (!target.workerProcess) {
+        throw electronOnly('electronApp.process() while attached to a worker the test started')
+      }
+      return target.workerProcess
+    },
     windows: () => target.context()?.pages() ?? [],
     firstWindow: async () => target.page(),
     context: () => target.context(),

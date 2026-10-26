@@ -6,10 +6,18 @@
 // Categories:
 // - electron-only: the test drives the Electron main process, native dialogs/menus, BrowserWindow,
 //   desktop restart semantics or OS integration that the Web UI does not have.
+// - electron-native-input: relies on Electron's clipboard/nativeImage or native file paths for input
+//   (image paste, OS file drop); the Web UI's own path is covered by a web test in tests/e2e-web-canvas.
+// - desktop-only-feature: a feature the Web UI does not offer by decision (e.g. the issue report).
 // - web-ui-bug: a real difference in the Web UI that should be fixed there (listed in RELEASES.md).
 // - known-failing: fails in web mode for a reason not yet sorted out.
 
-export type WebTargetSkipCategory = 'electron-only' | 'web-ui-bug' | 'known-failing'
+export type WebTargetSkipCategory =
+  | 'electron-only'
+  | 'electron-native-input'
+  | 'desktop-only-feature'
+  | 'web-ui-bug'
+  | 'known-failing'
 
 export interface WebTargetSkip {
   file: string
