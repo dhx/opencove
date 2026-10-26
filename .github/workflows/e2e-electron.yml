@@ -1,0 +1,86 @@
+# The Electron desktop suite on Linux (moved out of ci.yml in this fork, docs/dhx/RELEASES.md). We ship the
+# server build with the Web UI, not the desktop app, so our releases do not wait for this suite: it runs on
+# every pull request and every push to main and reports there, while dhx-auto-release follows the CI
+# workflow only. The Web UI is gated by the web suites in ci.yml.
+name: E2E (Electron)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+
+jobs:
+  e2e-ubuntu:
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Free disk space
+        run: |
+          df -h
+          sudo rm -rf /usr/local/lib/android || true
+          sudo rm -rf /usr/share/dotnet || true
+          sudo rm -rf /opt/ghc || true
+          sudo rm -rf /usr/share/swift || true
+          df -h
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 9.6.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Chromium for Desktop/Web continuity E2E
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: ''
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Build
+        run: pnpm build
+
+      - name: E2E tests (shard)
+        timeout-minutes: 30
+        env:
+          OPENCOVE_E2E_SKIP_BUILD: '1'
+          OPENCOVE_E2E_WINDOW_MODE: inactive
+          OPENCOVE_E2E_RETRIES: '0'
+          OPENCOVE_E2E_DISABLE_CRASH_FALLBACK: '1'
+        run: xvfb-run -a -s "-screen 0 1600x1200x24" pnpm test:e2e -- --shard=${{ matrix.shard }}/3 --max-failures=2
+
+      - name: Upload Playwright artifacts
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-artifacts-ubuntu-shard-${{ matrix.shard }}
+          path: |
+            test-results/
+          retention-days: 7
+
+      - name: Cleanup E2E temp dirs
+        if: always()
+        run: |
+          if [ -n "${RUNNER_TEMP:-}" ]; then rm -rf "${RUNNER_TEMP}/opencove-e2e" || true; fi
+          rm -rf "/tmp/opencove-e2e" || true
+          rm -rf "/tmp/cove-e2e-user-data-"* || true
