@@ -8,6 +8,8 @@ export const zhCNSpaceExplorer = {
   expandFolder: '展开 {{name}}',
   collapseFolder: '收起 {{name}}',
   openFailed: '无法在画布中打开此项目：{{message}}',
+  browserFolderDropUnsupported: '无法从浏览器拖入文件夹——请改为将该文件夹添加为项目。',
+  browserDropNoProject: '请先打开一个项目，再把文件拖入画布。',
   nativeDropUnavailable: '请使用桌面端拖入本机文件，或从文件浏览器拖入画布。',
   parentDirectory: '上级目录',
   refresh: '刷新',

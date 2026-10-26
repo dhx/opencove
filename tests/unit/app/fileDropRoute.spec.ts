@@ -4,6 +4,7 @@ import { mkdtemp, mkdir, readFile, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Readable } from 'node:stream'
+import { pathToFileURL } from 'node:url'
 import { describe, expect, it, vi } from 'vitest'
 import {
   handleFileDropRoute,
@@ -63,6 +64,7 @@ describe('Files dropped onto a terminal in the Web UI', () => {
     expect(JSON.parse(res.body)).toEqual({
       ok: true,
       path: join(dir, '2026-10-25', 'my_notes.txt'),
+      uri: pathToFileURL(join(dir, '2026-10-25', 'my_notes.txt')).href,
     })
 
     const big = Object.assign(Readable.from([]), {

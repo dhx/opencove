@@ -288,6 +288,7 @@ export function createControlSurfaceHttpRuntime(
     enableDebugRoutes: options.enableDebugRoutes === true,
     dropsDirectory: resolve(options.userDataPath, 'drops'),
     canvasImagesDirectory: resolveCanvasImageStoreDir(options.userDataPath),
+    approvedWorkspaces: options.approvedWorkspaces,
   })
 
   const runtime: ControlSurfaceHttpRuntime = {

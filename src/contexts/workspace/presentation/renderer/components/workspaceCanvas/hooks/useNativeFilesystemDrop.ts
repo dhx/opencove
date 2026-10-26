@@ -2,12 +2,13 @@ import {
   useCallback,
   useLayoutEffect,
   useRef,
+  type DragEvent,
   type DragEventHandler,
   type MutableRefObject,
 } from 'react'
 import { useReactFlow } from '@xyflow/react'
 import { useTranslation } from '@app/renderer/i18n'
-import { CANVAS_IMAGE_MIME_TYPES } from '@shared/contracts/dto'
+import { CANVAS_IMAGE_MIME_TYPES, type FileSystemStat } from '@shared/contracts/dto'
 import type { Point, WorkspaceSpaceState } from '../../../types'
 import { getCollapsedNodeSize } from '../../../utils/canvasCollapse'
 import {
@@ -20,6 +21,11 @@ import {
   readNativeDroppedFiles,
   toNativeFilesystemEntry,
 } from '../nativeFilesystemDrop'
+import {
+  isBrowserCanvasRuntime,
+  readBrowserDroppedFiles,
+  resolveBrowserDropDirectory,
+} from '../browserCanvasFileDrop'
 import { toErrorMessage } from '../helpers'
 import type { ShowWorkspaceCanvasMessage } from '../types'
 import { findContainingSpaceByAnchor } from './useInteractions.spaceAssignment'
@@ -32,11 +38,14 @@ export interface FilesystemMaterializeOptions {
 
 export function useNativeFilesystemDrop({
   workspaceId,
+  workspacePath,
   spacesRef,
   materialize,
   onShowMessage,
 }: {
   workspaceId: string
+  /** The project root; in the Web UI, dropped files are uploaded into it (or the space's folder). */
+  workspacePath?: string
   spacesRef: MutableRefObject<WorkspaceSpaceState[]>
   materialize: (
     entry: FilesystemEntryDragData,
@@ -63,41 +72,22 @@ export function useNativeFilesystemDrop({
     }
   }, [])
 
-  const handleNativeDrop = useCallback<DragEventHandler<HTMLDivElement>>(
-    event => {
-      const transfer = event.dataTransfer
-      if (
-        !isFilesystemCanvasDropTarget(event.target) ||
-        hasFilesystemEntryDragData(transfer) ||
-        !hasNativeFileTransfer(transfer)
-      ) {
-        return
-      }
-      const files = readNativeDroppedFiles(transfer)
-      if (!files.length) {
-        const imageFiles = Array.from(transfer.files ?? []).filter(file =>
-          (CANVAS_IMAGE_MIME_TYPES as readonly string[]).includes(file.type),
-        )
-        if (imageFiles.length < transfer.files.length) {
-          onShowMessage?.(t('spaceExplorer.nativeDropUnavailable'), 'warning')
-        }
-        // The existing image importer still owns clipboard/web-created images.
-        if (!imageFiles.length) {
-          event.preventDefault()
-          event.stopPropagation()
-        }
-        return
-      }
-      event.preventDefault()
-      event.stopPropagation()
-      const anchor = reactFlow.screenToFlowPosition({ x: event.clientX, y: event.clientY })
+  const placeDroppedFiles = useCallback(
+    (
+      files: File[],
+      clientPoint: { x: number; y: number },
+      resolveDroppedFile: (
+        file: File,
+        targetSpaceId: string | null,
+      ) => Promise<FileSystemStat | null>,
+    ) => {
+      const anchor = reactFlow.screenToFlowPosition(clientPoint)
       const targetSpaceId = findContainingSpaceByAnchor(spacesRef.current, anchor)?.id ?? null
       const epoch = lifetime.current
       const isCurrent = () =>
         epoch !== null &&
         lifetime.current === epoch &&
         (targetSpaceId === null || spacesRef.current.some(space => space.id === targetSpaceId))
-      const resolveDroppedFile = window.opencoveApi.filesystem.resolveDroppedFile!
       void (async () => {
         for (const [index, file] of files.entries()) {
           if (!isCurrent()) {
@@ -106,7 +96,7 @@ export function useNativeFilesystemDrop({
           try {
             // Stop authorizing remaining entries as soon as this canvas is no longer current.
             // eslint-disable-next-line no-await-in-loop
-            const entry = toNativeFilesystemEntry(await resolveDroppedFile(file))
+            const entry = toNativeFilesystemEntry(await resolveDroppedFile(file, targetSpaceId))
             if (!isCurrent()) {
               return
             }
@@ -136,6 +126,77 @@ export function useNativeFilesystemDrop({
       })()
     },
     [materialize, onShowMessage, reactFlow, spacesRef, t],
+  )
+
+  /** Web UI: upload into the project, then reference the new file (images stay image nodes). */
+  const handleBrowserDrop = useCallback(
+    (event: DragEvent<HTMLDivElement>) => {
+      const { files, images, folderCount } = readBrowserDroppedFiles(event.dataTransfer)
+      if (folderCount > 0) {
+        onShowMessage?.(t('spaceExplorer.browserFolderDropUnsupported'), 'warning')
+      }
+      event.preventDefault()
+      // The canvas image importer, further up, still takes the images.
+      if (images.length === 0) {
+        event.stopPropagation()
+      }
+      const resolveDroppedFile = window.opencoveApi?.filesystem?.resolveDroppedFile
+      if (files.length === 0 || !resolveDroppedFile) {
+        return
+      }
+      if (!resolveBrowserDropDirectory(null, workspacePath)) {
+        onShowMessage?.(t('spaceExplorer.browserDropNoProject'), 'warning')
+        return
+      }
+      placeDroppedFiles(files, { x: event.clientX, y: event.clientY }, (file, targetSpaceId) =>
+        resolveDroppedFile(file, {
+          targetDirectoryPath: resolveBrowserDropDirectory(
+            spacesRef.current.find(space => space.id === targetSpaceId) ?? null,
+            workspacePath,
+          ),
+        }),
+      )
+    },
+    [onShowMessage, placeDroppedFiles, spacesRef, t, workspacePath],
+  )
+
+  const handleNativeDrop = useCallback<DragEventHandler<HTMLDivElement>>(
+    event => {
+      const transfer = event.dataTransfer
+      if (
+        !isFilesystemCanvasDropTarget(event.target) ||
+        hasFilesystemEntryDragData(transfer) ||
+        !hasNativeFileTransfer(transfer)
+      ) {
+        return
+      }
+      if (isBrowserCanvasRuntime()) {
+        handleBrowserDrop(event)
+        return
+      }
+      const files = readNativeDroppedFiles(transfer)
+      if (!files.length) {
+        const imageFiles = Array.from(transfer.files ?? []).filter(file =>
+          (CANVAS_IMAGE_MIME_TYPES as readonly string[]).includes(file.type),
+        )
+        if (imageFiles.length < transfer.files.length) {
+          onShowMessage?.(t('spaceExplorer.nativeDropUnavailable'), 'warning')
+        }
+        // The existing image importer still owns clipboard/web-created images.
+        if (!imageFiles.length) {
+          event.preventDefault()
+          event.stopPropagation()
+        }
+        return
+      }
+      event.preventDefault()
+      event.stopPropagation()
+      const resolveDroppedFile = window.opencoveApi.filesystem.resolveDroppedFile!
+      placeDroppedFiles(files, { x: event.clientX, y: event.clientY }, file =>
+        resolveDroppedFile(file),
+      )
+    },
+    [handleBrowserDrop, onShowMessage, placeDroppedFiles, t],
   )
 
   return { handleNativeDragOver, handleNativeDrop }
