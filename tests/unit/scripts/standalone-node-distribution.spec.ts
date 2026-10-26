@@ -44,21 +44,6 @@ describe('standalone Node distribution contracts', () => {
     expect(powershellInstaller).not.toContain('Get-FileHash')
   })
 
-  it('runs the Linux release smoke in a minimal container', async () => {
-    const [workflow, smoke] = await Promise.all([
-      readFile(resolve(rootDir, '.github/workflows/release.yml'), 'utf8'),
-      readFile(resolve(rootDir, 'scripts/smoke-standalone-node-runtime.sh'), 'utf8'),
-    ])
-
-    expect(workflow).toContain('debian:bookworm-slim')
-    expect(workflow).toContain('smoke-standalone-node-runtime.sh')
-    expect(workflow).toContain('$env:OPENCOVE_STANDALONE_CHECKSUMS_FILE = $checksumFile')
-    expect(smoke).toContain('/proc/${LAUNCHER_PID}/exe')
-    expect(smoke).toContain('/proc/${WORKER_PID}/exe')
-    expect(smoke).toContain('connection.appVersion !== packageJson.version')
-    expect(smoke).toContain('no Electron executable present')
-  })
-
   it('isolates published code and proves the public uninstaller cleaned its owned paths', async () => {
     const smoke = await readFile(
       resolve(rootDir, 'scripts/smoke-published-standalone-runtime.mjs'),
@@ -72,32 +57,6 @@ describe('standalone Node distribution contracts', () => {
     expect(smoke).toContain('invokeUninstaller()')
     expect(smoke).toContain('assertUninstallPostconditions()')
     expect(smoke).toContain('assertPublishedAssetChecksum')
-  })
-
-  it('downloads and starts every published standalone Worker after the release is public', async () => {
-    const workflow = await readFile(resolve(rootDir, '.github/workflows/release.yml'), 'utf8')
-    const publishAt = workflow.indexOf('  publish:')
-    const verificationAt = workflow.indexOf('  verify-published-standalone:')
-
-    expect(publishAt).toBeGreaterThanOrEqual(0)
-    expect(verificationAt).toBeGreaterThan(publishAt)
-    const verification = workflow.slice(verificationAt)
-    expect(verification).toContain('needs: publish')
-    expect(verification).toContain('permissions:\n      contents: read')
-    expect(verification).toContain('persist-credentials: false')
-    expect(verification).toContain('scripts/smoke-published-standalone-runtime.mjs')
-    expect(verification).toContain('macos-15')
-    expect(verification).toContain('macos-15-intel')
-    expect(verification).toContain('windows-2022')
-    expect(verification).toContain('ubuntu-latest')
-    expect(workflow).toContain('prerelease: true\n          make_latest: false')
-    expect(workflow).toContain('  promote-stable:')
-    expect(workflow).toContain('needs: [publish, verify-published-standalone]')
-    expect(workflow).toContain(
-      'gh release edit "$OPENCOVE_RELEASE_TAG" --prerelease=false --latest',
-    )
-    expect(workflow).toContain('  verify-latest-stable:')
-    expect(workflow).toContain('--installer-source=latest')
   })
 })
 

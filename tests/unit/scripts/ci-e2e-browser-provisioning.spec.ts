@@ -14,12 +14,10 @@ function readJob(workflow: string, jobName: string, nextJobName: string): string
 }
 
 describe('CI E2E browser provisioning', () => {
-  it('installs Chromium before Desktop/Web continuity tests on Linux and macOS', async () => {
+  // This fork runs CI on Linux only (docs/dhx/RELEASES.md).
+  it('installs Chromium before Desktop/Web continuity tests on Linux', async () => {
     const workflow = await readFile(resolve(rootDir, '.github/workflows/ci.yml'), 'utf8')
-    const jobs = [
-      readJob(workflow, 'e2e-ubuntu', 'web-canvas-continuity-ubuntu'),
-      readJob(workflow, 'ci-macos', 'platform-e2e-windows'),
-    ]
+    const jobs = [readJob(workflow, 'e2e-ubuntu', 'web-canvas-continuity-ubuntu')]
 
     for (const job of jobs) {
       const installAt = job.indexOf('Install Chromium for Desktop/Web continuity E2E')
