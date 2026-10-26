@@ -24,7 +24,7 @@ git tag dhx/v0.4.1-dhx-001 && git push origin dhx/v0.4.1-dhx-001
   three digits sort correctly as text, and the next patch number makes it newer than the upstream release it
   builds on. Semver counts it as a pre-release, so a plugin that names a version range has to allow
   pre-releases.
-- **Tags.** Upstream's `release.yml` reacts to `v*` tags, so ours start with `dhx/` and never trigger it.
+- **Tags.** Ours start with `dhx/` (upstream's tags are `v*`).
 - **What the workflow does:**
   1. Stamps the version and builds the server bundle (`pnpm build:standalone`).
   2. Runs the checks below.
@@ -65,7 +65,9 @@ git remote add upstream https://github.com/DeadWaveWave/opencove   # once
 git fetch upstream && git merge upstream/main                      # on a branch, as a pull request
 ```
 
-The release checks run on the merge's next release. A conflict in one of our changes shows up in the
+The release checks run on the merge's next release. This fork deletes upstream's `release.yml` and
+`nightly.yml` (desktop releases for macOS, Windows and Linux) and runs CI on Linux only. When upstream changes
+those workflows or the macOS/Windows jobs in `ci.yml`, the merge reports a conflict; keep our side. A conflict in one of our changes shows up in the
 merge, and a returning phone-home shows up in the checks.
 
 ## Our changes
@@ -73,6 +75,7 @@ merge, and a returning phone-home shows up in the checks.
 | Change | Why |
 |---|---|
 | Release workflow and checks (`.github/workflows/dhx-release.yml`, `dhx-auto-release.yml`, `scripts/dhx/`) | Our own verified builds, released automatically when main is green (#1) |
+| CI on Linux only: no `ci-macos` or `platform-e2e-windows` jobs; upstream's desktop `release.yml` and `nightly.yml` removed | We ship only the Linux server build; the macOS shards set the release time (#7) |
 | Files dropped or pasted onto a terminal in the Web UI go to the worker (`/files/drop`), and their path is pasted | The Web UI had no way to pass a file to an agent (#2) |
 | No auto-update, no GitHub plugin catalog unless `OPENCOVE_PLUGIN_CATALOG=1`, no default upstream downloads for managed SSH, no Gemini schema fetch, spellcheck off, issue reports to this fork; plugin views in an opaque origin, website nodes refuse the UI's own origin | Nothing contacts third parties on its own; plugin and website content cannot act as the UI (#3) |
 | Token and password from env or file (not argv, not printed), no `?token=` unless enabled, Origin check for bearer requests, JSON and size limit on `/invoke`, `/debug/shell` off, security headers, Secure cookie behind TLS, no open bind without a password, database files 0600 | The worker's credentials stay out of process lists and logs; a token-injecting proxy is safe (#4) |
