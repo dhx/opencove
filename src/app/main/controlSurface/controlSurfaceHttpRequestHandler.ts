@@ -29,6 +29,11 @@ import {
   isHtmlContentType,
 } from './http/webUiSecurityHeaders'
 import { FILE_DROP_PATH, handleFileDropRoute } from './http/fileDropRoute'
+import {
+  handleCanvasImageRoute,
+  isCanvasImageMutation,
+  isCanvasImageRoute,
+} from './http/canvasImageRoutes'
 import type {
   ControlSurfaceHttpListenerOptions,
   ControlSurfaceHttpListenerRequestContext,
@@ -56,6 +61,8 @@ export interface ControlSurfaceHttpRequestHandlerDeps {
   maxInvokeBodyBytes?: number
   /** Where files dropped onto a terminal in the Web UI are kept; unset turns the route off. */
   dropsDirectory?: string
+  /** Where canvas images are kept (`<userData>/canvas-images`); unset turns the routes off. */
+  canvasImagesDirectory?: string
 }
 
 function listenerAllowsAuth(
@@ -91,6 +98,33 @@ function sendForbidden(res: ServerResponse): void {
     ok: false,
     error: createAppErrorDescriptor('control_surface.unauthorized'),
   })
+}
+
+/**
+ * Auth for the raw file routes: the same as /invoke (no `?token=`). Requests that store or remove
+ * something must also carry `x-opencove-drop: 1`, which plain cross-site form posts cannot set.
+ */
+function isAuthorizedFileRequest(options: {
+  deps: ControlSurfaceHttpRequestHandlerDeps
+  req: IncomingMessage
+  url: URL
+  listener: ControlSurfaceHttpListenerRequestContext
+  requireCustomHeader: boolean
+}): boolean {
+  const { deps, req } = options
+  const auth = resolveRequestAuth({
+    req,
+    url: options.url,
+    token: deps.token,
+    webSessions: deps.webSessions,
+    allowQueryToken: false,
+    now: deps.ctx.now(),
+  })
+  return (
+    auth !== null &&
+    listenerAllowsAuth(options.listener.role, auth) &&
+    (!options.requireCustomHeader || req.headers['x-opencove-drop'] === '1')
+  )
 }
 
 export function createControlSurfaceHttpRequestHandler(
@@ -132,6 +166,35 @@ export function createControlSurfaceHttpRequestHandler(
         isWebUiAuthRevisionCurrent: listener.isWebUiAuthRevisionCurrent,
       }))
     ) {
+      return
+    }
+
+    if (deps.canvasImagesDirectory && isCanvasImageRoute(url.pathname)) {
+      if (
+        !isAuthorizedFileRequest({
+          deps,
+          req,
+          url,
+          listener,
+          requireCustomHeader: isCanvasImageMutation(req.method),
+        })
+      ) {
+        req.resume()
+        sendJson(res, 401, buildUnauthorizedResult())
+        return
+      }
+      try {
+        await handleCanvasImageRoute({
+          req,
+          res,
+          pathname: url.pathname,
+          storeDirectory: deps.canvasImagesDirectory,
+        })
+      } catch {
+        if (!res.headersSent) {
+          sendJson(res, 500, { ok: false, error: 'The canvas image request failed.' })
+        }
+      }
       return
     }
 
@@ -259,20 +322,7 @@ export function createControlSurfaceHttpRequestHandler(
     }
 
     if (req.method === 'POST' && url.pathname === FILE_DROP_PATH && deps.dropsDirectory) {
-      const auth = resolveRequestAuth({
-        req,
-        url,
-        token: deps.token,
-        webSessions: deps.webSessions,
-        allowQueryToken: false,
-        now: deps.ctx.now(),
-      })
-      // The custom header keeps out plain cross-site form posts, which cannot set it.
-      if (
-        !auth ||
-        !listenerAllowsAuth(listener.role, auth) ||
-        req.headers['x-opencove-drop'] !== '1'
-      ) {
+      if (!isAuthorizedFileRequest({ deps, req, url, listener, requireCustomHeader: true })) {
         req.resume()
         sendJson(res, 401, buildUnauthorizedResult())
         return

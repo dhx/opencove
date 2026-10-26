@@ -206,3 +206,90 @@ export async function readTextFile(filePath: string): Promise<string> {
 export async function writeTextFile(filePath: string, content: string): Promise<void> {
   await writeFile(filePath, content, 'utf8')
 }
+
+export type DroppedFileSpec =
+  | { kind: 'file'; name: string; type: string; base64: string }
+  | { kind: 'directory'; name: string }
+
+/**
+ * Dispatches a paste (`ClipboardEvent`) or a drop (`DragEvent`, preceded by `dragover`) carrying
+ * files onto the element matching `selector`, the way a browser does for files from the desktop.
+ * WebKit ignores `clipboardData`/`dataTransfer` in event init dictionaries, so they are also defined
+ * on the event. A `directory` entry looks like a dropped folder (`webkitGetAsEntry().isDirectory`).
+ */
+export async function dispatchFileTransfer(
+  page: Page,
+  selector: string,
+  type: 'paste' | 'drop',
+  files: DroppedFileSpec[],
+  clientPoint?: { x: number; y: number },
+): Promise<void> {
+  await page.evaluate(
+    ({ selector: targetSelector, type: eventType, files: specs, clientPoint: point }) => {
+      const target = document.querySelector(targetSelector)
+      if (!target) {
+        throw new Error(`No element for ${targetSelector}`)
+      }
+      const decode = (base64: string) => Uint8Array.from(atob(base64), char => char.charCodeAt(0))
+      const transfer = new DataTransfer()
+      for (const spec of specs) {
+        transfer.items.add(
+          spec.kind === 'file'
+            ? new File([decode(spec.base64)], spec.name, { type: spec.type })
+            : new File([], spec.name, { type: '' }),
+        )
+      }
+      // Script-made items have no file system entry; answer the one a real drop would have.
+      const directoryNames = new Set(
+        specs.filter(spec => spec.kind === 'directory').map(spec => spec.name),
+      )
+      DataTransferItem.prototype.webkitGetAsEntry = function webkitGetAsEntry(
+        this: DataTransferItem,
+      ) {
+        const name = this.getAsFile()?.name ?? ''
+        return {
+          isFile: !directoryNames.has(name),
+          isDirectory: directoryNames.has(name),
+          name,
+        } as FileSystemEntry
+      }
+      const rect = target.getBoundingClientRect()
+      const clientX = point?.x ?? rect.left + rect.width / 2
+      const clientY = point?.y ?? rect.top + rect.height / 2
+      const withTransfer = (event: Event, key: 'clipboardData' | 'dataTransfer') => {
+        if ((event as unknown as Record<string, unknown>)[key] !== transfer) {
+          Object.defineProperty(event, key, { configurable: true, value: transfer })
+        }
+        return event
+      }
+      if (eventType === 'paste') {
+        target.dispatchEvent(
+          withTransfer(
+            new ClipboardEvent('paste', {
+              bubbles: true,
+              cancelable: true,
+              clipboardData: transfer,
+            }),
+            'clipboardData',
+          ),
+        )
+        return
+      }
+      for (const name of ['dragenter', 'dragover', 'drop']) {
+        target.dispatchEvent(
+          withTransfer(
+            new DragEvent(name, {
+              bubbles: true,
+              cancelable: true,
+              clientX,
+              clientY,
+              dataTransfer: transfer,
+            }),
+            'dataTransfer',
+          ),
+        )
+      }
+    },
+    { selector, type, files, clientPoint },
+  )
+}
