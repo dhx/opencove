@@ -4,7 +4,7 @@ import {
   type ElectronApplication,
   type Page,
 } from '@playwright/test'
-import { mkdir, rm } from 'node:fs/promises'
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { createTestUserDataDir, resolveE2ETmpDir } from '../workspace-canvas.testUtils'
@@ -108,7 +108,23 @@ export async function launchWebApp(
   ]
   await mkdir(path.join(resolveE2ETmpDir(), 'opencove-e2e'), { recursive: true })
 
-  const worker = await startWebTargetWorker({ userDataDir, approvedRoots, env })
+  // The browser keeps its data (localStorage, cookies) per origin, so a restart on the same user data
+  // dir reuses the previous port, as a real deployment keeps its address.
+  const portFile = path.join(userDataDir, 'web-target-port')
+  const previousPort = Number.parseInt(await readFile(portFile, 'utf8').catch(() => ''), 10)
+  const worker = await startWebTargetWorker({
+    userDataDir,
+    approvedRoots,
+    env,
+    port: Number.isInteger(previousPort) && previousPort > 0 ? previousPort : 0,
+  }).catch(async error => {
+    if (!(previousPort > 0)) {
+      throw error
+    }
+    // The previous port was taken in the meantime; a new origin is better than no restart.
+    return await startWebTargetWorker({ userDataDir, approvedRoots, env, port: 0 })
+  })
+  await writeFile(portFile, String(new URL(worker.baseUrl).port))
   let context: BrowserContext | null = null
 
   let closePromise: Promise<void> | null = null

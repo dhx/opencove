@@ -13,14 +13,12 @@ function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
-// Playwright matches grep against "<project> <file> <describe titles> <test title> <tags>".
+// Playwright matches grep against "<project> <file> <describe titles> <test title> <tags>"; a skip's
+// title may be a fragment of a templated test title.
 const skippedTests = webTargetSkips
   .filter(skip => typeof skip.title === 'string')
   .map(
-    skip =>
-      new RegExp(
-        `(^|\\s)${escapeRegExp(skip.file)}\\s(.*\\s)?${escapeRegExp(skip.title ?? '')}(\\s@\\S+)*$`,
-      ),
+    skip => new RegExp(`(^|\\s)${escapeRegExp(skip.file)}\\s.*${escapeRegExp(skip.title ?? '')}`),
   )
 const skippedFiles = webTargetSkips
   .filter(skip => typeof skip.title !== 'string')

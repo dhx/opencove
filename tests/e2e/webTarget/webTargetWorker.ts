@@ -125,10 +125,20 @@ async function findRunningWorker(
 export async function startWebTargetWorker(options: {
   userDataDir: string
   approvedRoots: string[]
+  /** 0 for any free port; a restart passes the previous port so the UI keeps its origin. */
+  port: number
   env: Record<string, string>
 }): Promise<StartedWebTargetWorker> {
   const running = await findRunningWorker(options.userDataDir)
   if (running) {
+    // The desktop app approves its test roots in the shared store when it connects; do the same.
+    await Promise.all(
+      options.approvedRoots.map(root =>
+        invokeWorker(running, 'command', 'workspace.approveRoot', { path: root }).catch(
+          () => undefined,
+        ),
+      ),
+    )
     return { ...running, process: null, stop: async () => undefined, logTail: () => '' }
   }
 
@@ -139,7 +149,7 @@ export async function startWebTargetWorker(options: {
     '--hostname',
     '127.0.0.1',
     '--port',
-    '0',
+    String(options.port),
     '--user-data',
     options.userDataDir,
     ...options.approvedRoots.flatMap(root => ['--approve-root', root]),
@@ -238,26 +248,37 @@ export async function startWebTargetWorker(options: {
   }
 }
 
-export async function issueWebSessionTicket(baseUrl: string, token: string): Promise<string> {
-  const response = await fetch(`${baseUrl}/invoke`, {
+async function invokeWorker<TValue>(
+  worker: { baseUrl: string; token: string },
+  kind: 'query' | 'command',
+  id: string,
+  payload: unknown,
+): Promise<TValue> {
+  const response = await fetch(`${worker.baseUrl}/invoke`, {
     method: 'POST',
-    headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
-    body: JSON.stringify({
-      kind: 'query',
-      id: 'auth.issueWebSessionTicket',
-      payload: { redirectPath: '/' },
-    }),
+    headers: { authorization: `Bearer ${worker.token}`, 'content-type': 'application/json' },
+    body: JSON.stringify({ kind, id, payload }),
   })
   const envelope = (await response.json()) as
-    | { ok: true; value: { ticket: string } }
+    | { ok: true; value: TValue }
     | { ok: false; error?: { code?: string } }
   if (!response.ok || !envelope.ok) {
     throw new Error(
-      `[e2e-web] Could not issue a web session ticket: ${response.status} ${
+      `[e2e-web] ${id} failed: ${response.status} ${
         envelope.ok ? '' : (envelope.error?.code ?? 'unknown_error')
       }`,
     )
   }
 
-  return envelope.value.ticket
+  return envelope.value
+}
+
+export async function issueWebSessionTicket(baseUrl: string, token: string): Promise<string> {
+  const result = await invokeWorker<{ ticket: string }>(
+    { baseUrl, token },
+    'query',
+    'auth.issueWebSessionTicket',
+    { redirectPath: '/' },
+  )
+  return result.ticket
 }
