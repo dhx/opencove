@@ -17,6 +17,7 @@ import { gateWebUiEntrypoint } from './http/webUiEntryGate'
 import { publishSyncEvent } from './http/publishSyncEvent'
 import { shouldAllowDevWebUiOrigin } from './http/devWebUiOrigin'
 import { buildUnauthorizedResult } from './http/unauthorizedResult'
+import { FILE_DROP_PATH, handleFileDropRoute } from './http/fileDropRoute'
 import type {
   ControlSurfaceHttpListenerOptions,
   ControlSurfaceHttpListenerRequestContext,
@@ -37,6 +38,8 @@ export interface ControlSurfaceHttpRequestHandlerDeps {
   desktopSyncEventSink?: (payload: SyncEventPayload) => number
   getWebAccessPolicy: () => ControlSurfaceWebAccessPolicy
   isRuntimeClosed: () => boolean
+  /** Where files dropped onto a terminal in the Web UI are kept; unset turns the route off. */
+  dropsDirectory?: string
 }
 
 function listenerAllowsAuth(
@@ -218,6 +221,34 @@ export function createControlSurfaceHttpRequestHandler(
         })
         return
       }
+    }
+
+    if (req.method === 'POST' && url.pathname === FILE_DROP_PATH && deps.dropsDirectory) {
+      const auth = resolveRequestAuth({
+        req,
+        url,
+        token: deps.token,
+        webSessions: deps.webSessions,
+        allowQueryToken: false,
+        now: deps.ctx.now(),
+      })
+      // The custom header keeps out plain cross-site form posts, which cannot set it.
+      if (
+        !auth ||
+        !listenerAllowsAuth(listener.role, auth) ||
+        req.headers['x-opencove-drop'] !== '1'
+      ) {
+        req.resume()
+        sendJson(res, 401, buildUnauthorizedResult())
+        return
+      }
+      await handleFileDropRoute({
+        req,
+        res,
+        dropsDirectory: deps.dropsDirectory,
+        now: deps.ctx.now(),
+      })
+      return
     }
 
     if (req.method !== 'POST' || req.url !== '/invoke') {
