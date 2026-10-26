@@ -7,7 +7,6 @@ import { expect } from '@playwright/test'
 type WorkerConnectionInfo = {
   hostname: string
   port: number
-  token: string
 }
 
 const WORKER_READY_TIMEOUT_MS = 7_500
@@ -25,13 +24,13 @@ function normalizeWorkerReadyPayload(value: unknown): WorkerConnectionInfo | nul
   const record = value as Record<string, unknown>
   const hostname = typeof record.hostname === 'string' ? record.hostname : null
   const port = typeof record.port === 'number' ? record.port : null
-  const token = typeof record.token === 'string' ? record.token : null
 
-  if (!hostname || !port || !token) {
+  if (!hostname || !port) {
     return null
   }
 
-  return { hostname, port, token }
+  // A CLI-started Worker does not print its token; it lives in the connection file.
+  return { hostname, port }
 }
 
 export async function startWorker(options: {
@@ -99,7 +98,6 @@ export async function startWorker(options: {
   // Sanity: keep the worker alive for the duration of the test.
   expect(info.hostname).toBeTruthy()
   expect(info.port).toBeGreaterThan(0)
-  expect(info.token).toBeTruthy()
 
   return { child }
 }

@@ -153,7 +153,7 @@ export function createControlSurfaceHttpRuntime(
     now: ctx.now,
     ptyRuntime,
     replayWindowMaxBytes: PTY_STREAM_DEFAULT_REPLAY_WINDOW_MAX_BYTES,
-    allowQueryToken: true,
+    allowQueryToken: options.allowQueryToken === true,
   })
   const persistence = createLazyPersistenceStore({
     strictRecovery: options.strictPersistence,
@@ -283,6 +283,8 @@ export function createControlSurfaceHttpRuntime(
     desktopSyncEventSink: options.desktopSyncEventSink,
     getWebAccessPolicy: () => webAccessPolicy,
     isRuntimeClosed: () => closed,
+    allowQueryToken: options.allowQueryToken === true,
+    enableDebugRoutes: options.enableDebugRoutes === true,
     dropsDirectory: resolve(options.userDataPath, 'drops'),
   })
 

@@ -18,6 +18,7 @@ import {
   toWsUrl,
   waitForCondition,
   waitForMessage,
+  bearerHeaders,
 } from './controlSurfaceHttpServer.sessionStreaming.testUtils'
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -184,8 +185,8 @@ describe('Control Surface HTTP server (multi-endpoint orchestration)', () => {
       const remoteSessionId = lastRemoteSessionId
       expect(typeof remoteSessionId).toBe('string')
 
-      const homeWsUrl = toWsUrl(homeBaseUrl, '/pty', { token: 'home-token' })
-      const ws = new WebSocket(homeWsUrl, 'opencove-pty.v1')
+      const homeWsUrl = toWsUrl(homeBaseUrl, '/pty', {})
+      const ws = new WebSocket(homeWsUrl, 'opencove-pty.v1', bearerHeaders('home-token'))
       await new Promise<void>((resolvePromise, rejectPromise) => {
         ws.once('open', resolvePromise)
         ws.once('error', rejectPromise)
@@ -280,8 +281,8 @@ describe('Control Surface HTTP server (multi-endpoint orchestration)', () => {
         rows: 32,
       })
 
-      const remoteWsUrl = toWsUrl(remoteBaseUrl, '/pty', { token: 'remote-token' })
-      const remoteWs = new WebSocket(remoteWsUrl, 'opencove-pty.v1')
+      const remoteWsUrl = toWsUrl(remoteBaseUrl, '/pty', {})
+      const remoteWs = new WebSocket(remoteWsUrl, 'opencove-pty.v1', bearerHeaders('remote-token'))
       await new Promise<void>((resolvePromise, rejectPromise) => {
         remoteWs.once('open', resolvePromise)
         remoteWs.once('error', rejectPromise)

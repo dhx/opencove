@@ -19,6 +19,7 @@ import {
   sendJson,
   toWsUrl,
   waitForMessage,
+  bearerHeaders,
 } from './controlSurfaceHttpServer.sessionStreaming.testUtils'
 
 describe('Control Surface terminal Agent re-exec stream operation', () => {
@@ -89,8 +90,8 @@ describe('Control Surface terminal Agent re-exec stream operation', () => {
         listener({ sessionId: 'session-1', resumeSessionId: null, agentProvider: 'pi' }),
       )
 
-      const wsUrl = toWsUrl(baseUrl, '/pty', { token: 'test-token' })
-      const controller = new WebSocket(wsUrl, 'opencove-pty.v1')
+      const wsUrl = toWsUrl(baseUrl, '/pty', {})
+      const controller = new WebSocket(wsUrl, 'opencove-pty.v1', bearerHeaders('test-token'))
       await new Promise<void>((resolvePromise, rejectPromise) => {
         controller.once('open', resolvePromise)
         controller.once('error', rejectPromise)
@@ -140,7 +141,7 @@ describe('Control Surface terminal Agent re-exec stream operation', () => {
       expect(missingEpoch.status).toBe('rejected_stale_authority')
       expect(writes).toHaveLength(2)
 
-      const viewer = new WebSocket(wsUrl, 'opencove-pty.v1')
+      const viewer = new WebSocket(wsUrl, 'opencove-pty.v1', bearerHeaders('test-token'))
       await new Promise<void>((resolvePromise, rejectPromise) => {
         viewer.once('open', resolvePromise)
         viewer.once('error', rejectPromise)

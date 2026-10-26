@@ -6,6 +6,8 @@ import {
   type WebSessionManager,
   WEB_SESSION_MAX_AGE_SECONDS,
 } from './webSessionManager'
+import { isSecureRequest, resolveClientAddress } from './requestTransport'
+import { applyWebUiHtmlSecurityHeaders } from './webUiSecurityHeaders'
 
 const MAX_LOGIN_BODY_BYTES = 8 * 1024
 const LOGIN_FAILURE_WINDOW_MS = 60_000
@@ -23,8 +25,7 @@ function nowMs(now: Date): number {
 }
 
 function resolveClientKey(req: IncomingMessage): string {
-  const raw = req.socket.remoteAddress ?? 'unknown'
-  return typeof raw === 'string' && raw.trim().length > 0 ? raw.trim() : 'unknown'
+  return resolveClientAddress(req)
 }
 
 function isLoginRateLimited(clientKey: string, now: Date): boolean {
@@ -267,6 +268,7 @@ export async function tryHandleWebAuthRoutes(options: {
         cookieName: webSessions.cookieName(),
         cookieValue: claim.cookieValue,
         maxAgeSeconds: WEB_SESSION_MAX_AGE_SECONDS,
+        secure: isSecureRequest(req),
       }),
     )
     res.setHeader('cache-control', 'no-store')
@@ -287,6 +289,7 @@ export async function tryHandleWebAuthRoutes(options: {
       res.statusCode = 200
       res.setHeader('content-type', 'text/html; charset=utf-8')
       res.setHeader('cache-control', 'no-store')
+      applyWebUiHtmlSecurityHeaders(res)
       res.end(renderLoginPage({ redirectPath, errorMessage: null }))
       return true
     }
@@ -314,6 +317,7 @@ export async function tryHandleWebAuthRoutes(options: {
         res.statusCode = 401
         res.setHeader('content-type', 'text/html; charset=utf-8')
         res.setHeader('cache-control', 'no-store')
+        applyWebUiHtmlSecurityHeaders(res)
         res.end(
           renderLoginPage({
             redirectPath: redirectPathFromBody,
@@ -333,6 +337,7 @@ export async function tryHandleWebAuthRoutes(options: {
           cookieName: webSessions.cookieName(),
           cookieValue: session.cookieValue,
           maxAgeSeconds: WEB_SESSION_MAX_AGE_SECONDS,
+          secure: isSecureRequest(req),
         }),
       )
       res.setHeader('cache-control', 'no-store')
@@ -349,7 +354,10 @@ export async function tryHandleWebAuthRoutes(options: {
     res.statusCode = 302
     res.setHeader(
       'set-cookie',
-      buildWebSessionClearCookieHeader({ cookieName: webSessions.cookieName() }),
+      buildWebSessionClearCookieHeader({
+        cookieName: webSessions.cookieName(),
+        secure: isSecureRequest(req),
+      }),
     )
     res.setHeader('cache-control', 'no-store')
     res.setHeader('location', '/')

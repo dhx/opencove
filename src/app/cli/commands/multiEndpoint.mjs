@@ -244,9 +244,11 @@ export async function tryHandleMultiEndpointCommands({
 
   if (command === 'pty' && args[1] === 'attach') {
     const sessionId = requireFlagValue(args, '--session')
-    const wsUrl = toWsUrl(connection, '/pty', { token: connection.token })
+    const wsUrl = toWsUrl(connection, '/pty', {})
 
-    const ws = new WebSocket(wsUrl, 'opencove-pty.v1')
+    const ws = new WebSocket(wsUrl, 'opencove-pty.v1', {
+      headers: { authorization: `Bearer ${connection.token}` },
+    })
     await new Promise((resolvePromise, rejectPromise) => {
       ws.once('open', resolvePromise)
       ws.once('error', rejectPromise)

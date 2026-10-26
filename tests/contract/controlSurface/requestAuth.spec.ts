@@ -144,4 +144,59 @@ describe('resolveRequestAuth', () => {
 
     expect(auth).toBeNull()
   })
+  function resolveTokenAuth(
+    headers: Record<string, string | undefined>,
+    options: { url?: string; allowQueryToken?: boolean } = {},
+  ) {
+    return resolveRequestAuth({
+      req: createRequest(headers),
+      url: new URL(options.url ?? 'http://127.0.0.1:8080/invoke'),
+      token: 'test-token',
+      webSessions: new WebSessionManager(),
+      allowQueryToken: options.allowQueryToken ?? false,
+      now: new Date('2026-04-01T00:00:00.000Z'),
+    })
+  }
+
+  it('accepts bearer tokens whose Origin matches the Host header', () => {
+    expect(
+      resolveTokenAuth({
+        authorization: 'Bearer test-token',
+        host: 'opencove.example.test',
+        origin: 'https://opencove.example.test',
+      }),
+    ).toEqual({ kind: 'bearer' })
+  })
+
+  it('rejects bearer tokens that arrive with a foreign Origin', () => {
+    expect(
+      resolveTokenAuth({
+        authorization: 'Bearer test-token',
+        host: 'opencove.example.test',
+        origin: 'https://evil.example',
+      }),
+    ).toBeNull()
+    expect(
+      resolveTokenAuth({
+        authorization: 'Bearer test-token',
+        host: '127.0.0.1:8080',
+        origin: 'null',
+      }),
+    ).toBeNull()
+  })
+
+  it('ignores the query token unless explicitly allowed', () => {
+    const headers = { host: '127.0.0.1:8080' }
+    const url = 'http://127.0.0.1:8080/events?token=test-token'
+    expect(resolveTokenAuth(headers, { url })).toBeNull()
+    expect(resolveTokenAuth(headers, { url, allowQueryToken: true })).toEqual({
+      kind: 'query_token',
+    })
+    expect(
+      resolveTokenAuth(
+        { ...headers, origin: 'http://evil.example' },
+        { url, allowQueryToken: true },
+      ),
+    ).toBeNull()
+  })
 })

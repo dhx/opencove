@@ -83,7 +83,7 @@ export function printUsage() {
   process.stdout.write(`  opencove session final --session <id> [--pretty]\n`)
   process.stdout.write(`  opencove session kill --session <id> [--pretty]\n\n`)
   process.stdout.write(
-    `  opencove worker start [--hostname <bindHost>] [--advertise-hostname <host>] [--port <port>] [--user-data <dir>] [--token <token>] [--web-ui-password <text> | --web-ui-password-hash <hash>] [--approve-root <path>]\n`,
+    `  opencove worker start [--hostname <bindHost>] [--advertise-hostname <host>] [--port <port>] [--user-data <dir>] [--token <token> | --token-file <path>] [--web-ui-password <text> | --web-ui-password-file <path> | --web-ui-password-hash <hash>] [--approve-root <path>] [--allow-insecure-bind] [--allow-query-token]\n`,
   )
   process.stdout.write(
     `  opencove worker status [--all] [--user-data <dir>] [--endpoint <url>] [--token <token>] [--pretty]\n`,
@@ -110,5 +110,8 @@ export function printUsage() {
   process.stdout.write(`Environment:\n`)
   process.stdout.write(
     `  OPENCOVE_USER_DATA_DIR=/path/to/userData (restrict lookup to this userData dir)\n`,
+  )
+  process.stdout.write(
+    `  OPENCOVE_WORKER_TOKEN, OPENCOVE_WEB_UI_PASSWORD, OPENCOVE_WEB_UI_PASSWORD_HASH (worker start: secrets without putting them on the command line)\n`,
   )
 }

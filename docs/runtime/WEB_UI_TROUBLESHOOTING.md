@@ -124,7 +124,7 @@ pnpm build
 
 **调试方法**
 
-- 打开 Debug shell：`http://127.0.0.1:<port>/debug/shell`
+- 打开 Debug shell：`http://127.0.0.1:<port>/debug/shell`（默认关闭；启动 Worker 时设置 `OPENCOVE_ENABLE_DEBUG_ROUTES=1`，Debug shell 的 `/events` 与 `/pty` 还需要 `OPENCOVE_ALLOW_QUERY_TOKEN=1`）
 - 在浏览器 Network 看 `/events` 是否持续收到 `app_state.updated`。
 - 在两个 client 同时在线时，检查是否都订阅了同一个 endpoint。
 

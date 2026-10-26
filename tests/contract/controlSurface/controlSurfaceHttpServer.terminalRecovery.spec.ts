@@ -17,6 +17,7 @@ import {
   safeRemoveDirectory,
   sendJson,
   toWsUrl,
+  bearerHeaders,
   waitForMessage,
 } from './controlSurfaceHttpServer.sessionStreaming.testUtils'
 import { describeWithElectronNativeModules } from '../electronNativeSuite'
@@ -78,7 +79,7 @@ describeWithElectronNativeModules('Control Surface terminal recovery durability'
     try {
       const info = await server.ready
       const baseUrl = `http://${info.hostname}:${info.port}`
-      const wsUrl = toWsUrl(baseUrl, '/pty', { token: 'terminal-recovery-token' })
+      const wsUrl = toWsUrl(baseUrl, '/pty', {})
       const workspaceId = randomUUID()
       const spaceId = randomUUID()
       const state = createMinimalState(workspacePath, workspaceId, spaceId)
@@ -152,7 +153,11 @@ describeWithElectronNativeModules('Control Surface terminal recovery durability'
       expect(staleRendererWrite.status).toBe(200)
 
       emitData?.({ sessionId: sessionId!, data: 'WORKER_OWNED_OUTPUT\r\n' })
-      const controller = new WebSocket(wsUrl, 'opencove-pty.v1')
+      const controller = new WebSocket(
+        wsUrl,
+        'opencove-pty.v1',
+        bearerHeaders('terminal-recovery-token'),
+      )
       await new Promise<void>((resolvePromise, rejectPromise) => {
         controller.once('open', resolvePromise)
         controller.once('error', rejectPromise)

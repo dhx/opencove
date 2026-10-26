@@ -91,10 +91,18 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command "Invoke-RestMethod https:
 无 Desktop 的 server 场景可直接启动 worker + Web UI：
 
 ```bash
-opencove worker start --hostname 0.0.0.0 --web-ui-password 'change-me'
+OPENCOVE_WEB_UI_PASSWORD='change-me' opencove worker start --hostname 0.0.0.0
 ```
 
-当 Web UI 暴露到 localhost 之外时，必须设置密码或等价安全门禁。
+当 Web UI 暴露到 localhost 之外时，必须设置密码或等价安全门禁：没有 Web UI 密码时，Worker 拒绝在非 loopback 地址上监听，除非显式传入 `--allow-insecure-bind`（例如前面已有自己的认证网关）。
+
+密钥不要放在命令行上（同机任何用户都能读到进程的 argv）：
+
+- Bearer token：`OPENCOVE_WORKER_TOKEN` 环境变量或 `--token-file <path>`；`--token` 仍可用，但会出现在进程列表中。
+- Web UI 密码：`OPENCOVE_WEB_UI_PASSWORD`、`OPENCOVE_WEB_UI_PASSWORD_HASH` 或 `--web-ui-password-file <path>`。
+- `opencove worker start` 会把 `--token` / `--web-ui-password` 通过环境变量传给 Worker 进程；Worker 读取后会从自身环境中删除这些变量，终端和 Agent 不会继承。
+- CLI 启动的 Worker 在 stdout 打印连接信息时不包含 token（`tokenRedacted: true`），token 只在 0600 的连接文件中。
+- `?token=` 查询参数（`/events`、`/pty`）默认关闭；只有无法发送 `Authorization` 头的客户端才需要用 `--allow-query-token` 或 `OPENCOVE_ALLOW_QUERY_TOKEN=1` 打开。
 
 ## 2. Local-first 的连接模型（约束）
 

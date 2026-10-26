@@ -86,6 +86,11 @@ export async function disposeAndCleanup(options: {
   )
 }
 
+/** WebSocket client options that authenticate with the bearer token (query tokens are off by default). */
+export function bearerHeaders(token: string): { headers: Record<string, string> } {
+  return { headers: { authorization: `Bearer ${token}` } }
+}
+
 export function toWsUrl(baseUrl: string, path: string, query: Record<string, string>): string {
   const url = new URL(baseUrl)
   url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:'
