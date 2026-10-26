@@ -79,36 +79,19 @@ function toManagedSshBootstrapError(detail: string): ManagedSshBootstrapError {
   return new ManagedSshBootstrapError(failureKind, actionableDetail || 'Remote bootstrap failed.')
 }
 
-function buildReleaseBaseUrl(version: string | null): string {
+/** This fork never falls back to upstream's GitHub releases: the release source must be configured. */
+function resolveReleaseBaseUrl(): string | null {
   const override = process.env['OPENCOVE_RELEASE_BASE_URL']?.trim()
-  if (override) {
-    return override
-  }
-
-  const normalizedVersion = version?.trim() ?? ''
-  if (normalizedVersion.length === 0) {
-    return 'https://github.com/DeadWaveWave/opencove/releases/latest/download'
-  }
-
-  return `https://github.com/DeadWaveWave/opencove/releases/download/v${normalizedVersion}`
+  return override ? override.replace(/\/+$/, '') : null
 }
 
-export function buildInstallerAssetUrl(
-  platform: BootstrapRemotePlatform,
-  version: string | null,
-): string {
-  const ext = platform === 'windows' ? 'ps1' : 'sh'
-  const baseUrl = buildReleaseBaseUrl(version)
-  const normalizedVersion = version?.trim() ?? ''
-  if (process.env['OPENCOVE_RELEASE_BASE_URL']?.trim()) {
-    return `${baseUrl}/opencove-install.${ext}`
+export function buildInstallerAssetUrl(platform: BootstrapRemotePlatform): string | null {
+  const baseUrl = resolveReleaseBaseUrl()
+  if (!baseUrl) {
+    return null
   }
 
-  if (normalizedVersion.length === 0) {
-    return `${baseUrl}/opencove-install.${ext}`
-  }
-
-  return `${baseUrl}/opencove-install-v${normalizedVersion}.${ext}`
+  return `${baseUrl}/opencove-install.${platform === 'windows' ? 'ps1' : 'sh'}`
 }
 
 async function classifyBootstrapPlatform(
@@ -181,10 +164,7 @@ export async function runManagedSshBootstrap(
   const remotePlatform = await classifyBootstrapPlatform(sshExecutablePath, access, options?.signal)
   const runtimeBuild = options?.runtimeBuild ?? getRuntimeBuildIdentity()
   const operationId = options?.operationId ?? randomUUID()
-  const installerUrl = buildInstallerAssetUrl(
-    remotePlatform,
-    runtimeBuild?.appVersion ?? options?.appVersion ?? null,
-  )
+  const installerUrl = buildInstallerAssetUrl(remotePlatform)
   const cachedDevelopmentArtifact =
     runtimeBuild?.channel === 'dev'
       ? resolve(__dirname, '../../release/managed-ssh', runtimeBuild.buildId)
@@ -259,6 +239,7 @@ export async function runManagedSshBootstrap(
   }
   if (
     result.exitCode !== 0 &&
+    installerUrl &&
     !localArtifact &&
     runtimeBuild &&
     runtimeBuild.channel !== 'dev' &&

@@ -315,7 +315,10 @@ describe('SettingsPanel', () => {
     const onCheckForUpdates = vi.fn()
     const onDownloadUpdate = vi.fn()
     mockTerminalProfiles()
+    // Updates default to off in this build; the panel still works for a build that offers them.
+    const settings = { ...DEFAULT_AGENT_SETTINGS, updatePolicy: 'prompt' as const }
     renderSettingsPanel({
+      settings,
       updateState: createUpdateState({
         status: 'available',
         latestVersion: '0.2.1',
@@ -329,14 +332,14 @@ describe('SettingsPanel', () => {
     fireEvent.click(screen.getByTestId('settings-update-policy-trigger'))
     fireEvent.click(screen.getByRole('option', { name: 'Auto Update' }))
     expect(onChange).toHaveBeenCalledWith({
-      ...DEFAULT_AGENT_SETTINGS,
+      ...settings,
       updatePolicy: 'auto',
     })
 
     fireEvent.click(screen.getByTestId('settings-update-channel-trigger'))
     fireEvent.click(screen.getByRole('option', { name: 'Nightly' }))
     expect(onChange).toHaveBeenCalledWith({
-      ...DEFAULT_AGENT_SETTINGS,
+      ...settings,
       updateChannel: 'nightly',
       updatePolicy: 'prompt',
     })

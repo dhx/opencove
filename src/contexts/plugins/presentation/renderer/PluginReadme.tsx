@@ -10,17 +10,23 @@ import {
 import Markdown, { type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 
+/**
+ * Remote (https) images are only loaded when the caller allows them: the repository view of the plugin
+ * catalog, which is off unless the worker opts in. Installed plugins and the handbook show bundled
+ * images only, so reading a README never contacts a third-party host.
+ */
 export function resolvePluginMarkdownUrl(
   value: string,
   kind: string,
   assets: Readonly<Record<string, string>>,
+  allowRemoteImages = false,
 ): string {
   if (kind === 'src') {
     const bundled = Object.hasOwn(assets, value) ? assets[value] : undefined
     if (bundled) {
       return bundled
     }
-    return /^https:\/\//i.test(value) ? value : ''
+    return allowRemoteImages && /^https:\/\//i.test(value) ? value : ''
   }
   if (value.startsWith('#') || /^https?:\/\//i.test(value)) {
     return value
@@ -128,9 +134,11 @@ export function PluginReadme({
   onOpenDocument,
   anchor,
   focusTitle = false,
+  allowRemoteImages = false,
 }: {
   markdown: string
   assets?: Readonly<Record<string, string>>
+  allowRemoteImages?: boolean
   resolveUrl?: (url: string, kind: string) => string
   resolveDocumentLink?: (href: string) => string | null
   onOpenDocument?: (id: string) => void
@@ -159,7 +167,12 @@ export function PluginReadme({
           urlTransform={(url, key) =>
             key === 'href' && resolveDocumentLink?.(url)
               ? url
-              : resolvePluginMarkdownUrl(resolveUrl?.(url, key) ?? url, key, assets)
+              : resolvePluginMarkdownUrl(
+                  resolveUrl?.(url, key) ?? url,
+                  key,
+                  assets,
+                  allowRemoteImages,
+                )
           }
           components={readmeComponents}
         >

@@ -1,9 +1,11 @@
 // @vitest-environment node
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   githubRepository,
   inspectGithubPluginRepository,
+  PLUGIN_CATALOG_OFF_MESSAGE,
 } from '../../../../src/contexts/plugins/infrastructure/GithubPluginRepository'
+import { GitPluginSources } from '../../../../src/contexts/plugins/infrastructure/GitPluginSources'
 const commit = 'a'.repeat(40)
 const credentialFixture = new URL('https://github.com/a/b')
 credentialFixture.username = 'fixture'
@@ -24,7 +26,51 @@ const file = (text: string, path = 'README.md') => ({
   content: Buffer.from(text).toString('base64'),
   path,
 })
-afterEach(() => vi.unstubAllGlobals())
+beforeEach(() => vi.stubEnv('OPENCOVE_PLUGIN_CATALOG', '1'))
+afterEach(() => {
+  vi.unstubAllGlobals()
+  vi.unstubAllEnvs()
+})
+describe('plugin catalog switch', () => {
+  it.each([undefined, '', '0', 'true'])(
+    'does not contact GitHub unless OPENCOVE_PLUGIN_CATALOG=1 (%s)',
+    async value => {
+      vi.stubEnv('OPENCOVE_PLUGIN_CATALOG', value)
+      const fetcher = vi.fn()
+      vi.stubGlobal('fetch', fetcher)
+      await expect(inspectGithubPluginRepository('https://github.com/a/b')).rejects.toThrow(
+        PLUGIN_CATALOG_OFF_MESSAGE,
+      )
+      await expect(new GitPluginSources('/nonexistent').discover('theme')).rejects.toThrow(
+        PLUGIN_CATALOG_OFF_MESSAGE,
+      )
+      expect(fetcher).not.toHaveBeenCalled()
+    },
+  )
+  it('searches GitHub for the plugin topic when the catalog is on', async () => {
+    const fetcher = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            items: [
+              {
+                full_name: 'a/b',
+                html_url: 'https://github.com/a/b',
+                description: 'd',
+                stargazers_count: 1,
+              },
+            ],
+          }),
+        ),
+    )
+    vi.stubGlobal('fetch', fetcher)
+    const result = await new GitPluginSources('/nonexistent').discover('theme')
+    expect(result.repositories.map(repository => repository.url)).toEqual([
+      'https://github.com/a/b',
+    ])
+    expect(String(fetcher.mock.calls[0]?.[0])).toContain('topic%3Aopencove-plugin')
+  })
+})
 describe('read-only GitHub plugin details', () => {
   it('pins README and manifest to a resolved commit without installing or running code', async () => {
     const fetcher = vi.fn(

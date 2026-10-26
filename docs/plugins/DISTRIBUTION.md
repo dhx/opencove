@@ -142,6 +142,10 @@ This is a search result, not a curated or verified catalog. It does not clone,
 install, execute, or update anything. Explicit installation and source review remain
 separate. GitHub rate limits and unavailable network access are reported as errors.
 
+Discovery and repository details are off by default in this build: OpenCove contacts GitHub for them
+only when the Worker runs with `OPENCOVE_PLUGIN_CATALOG=1`. Otherwise both report that the plugin
+catalog is off; installing from a git URL or a local directory is unaffected.
+
 ## Ownership and failure rules
 
 | State | Owner | Publication and recovery |
@@ -190,7 +194,8 @@ starts with the reviewed commit pinned; users can deliberately choose another re
 This inspection never clones, builds, activates a backend or executes an interactive
 preview. README HTML is ignored. Relative document links and images resolve inside
 the reviewed repository and commit; unsafe schemes and escaping paths are rejected.
-HTTPS documentation images are rendered without a referrer. GitHub requests do not
+HTTPS documentation images are rendered without a referrer, only in this repository detail (installed
+plugins' documentation shows bundled images only). GitHub requests do not
 carry credentials, reject redirects, have a ten-second timeout per request, and bound
 streamed JSON to 1 MiB (README envelope 512 KiB, manifest envelope 128 KiB). Decoded
 README and manifest limits are 256 KiB and 64 KiB. Network/rate-limit errors stay

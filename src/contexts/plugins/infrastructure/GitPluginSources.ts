@@ -2,6 +2,7 @@ import {
   inspectGithubPluginRepository,
   githubJson,
   githubRepository,
+  assertPluginCatalogEnabled,
 } from './GithubPluginRepository'
 import { randomUUID } from 'node:crypto'
 import { mkdir, readFile, readdir, stat } from 'node:fs/promises'
@@ -240,6 +241,7 @@ export class GitPluginSources implements PluginDistributionPort {
     return inspectGithubPluginRepository(repository)
   }
   async discover(query: string) {
+    assertPluginCatalogEnabled()
     const search = pluginString(query || 'opencove', 'search', 200)
     const body = await githubJson(
       `search/repositories?q=${encodeURIComponent(`topic:opencove-plugin ${search === 'opencove' ? '' : search}`)}&per_page=20`,

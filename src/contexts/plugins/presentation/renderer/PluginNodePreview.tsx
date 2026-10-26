@@ -7,9 +7,13 @@ import { PluginRuntimePreview } from './PluginRuntimePreview'
 export function PluginNodePreview({ pluginId }: { pluginId: string }): JSX.Element {
   const { t } = useTranslation()
   const plugin = usePluginManifest(pluginId)
-  return plugin?.source === 'local' && plugin.hasPreview ? (
+  if (plugin?.source !== 'local' || !plugin.hasPreview) {
+    return <p>{t('settingsPanel.plugins.preview.unavailable')}</p>
+  }
+  // A preview runs the plugin's code, so the host serves it only for an enabled plugin.
+  return plugin.enabled ? (
     <PluginRuntimePreview key={plugin.id} plugin={plugin} />
   ) : (
-    <p>{t('settingsPanel.plugins.preview.unavailable')}</p>
+    <p>{t('settingsPanel.plugins.preview.enableToPreview')}</p>
   )
 }

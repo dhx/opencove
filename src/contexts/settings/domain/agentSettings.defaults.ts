@@ -93,7 +93,7 @@ export const DEFAULT_AGENT_SETTINGS: AgentSettings = {
   uiFontSize: 18,
   performanceMonitorHeaderButtonEnabled: false,
   githubPullRequestsEnabled: true,
-  updatePolicy: 'prompt',
+  updatePolicy: 'off',
   updateChannel: 'stable',
   releaseNotesSeenVersion: null,
   hideWorktreeMismatchDropWarning: false,

@@ -91,6 +91,8 @@ export function ensureWebsiteWindowView({
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
+      // Electron's spellchecker downloads Hunspell dictionaries from Google's CDN.
+      spellcheck: false,
     },
   })
 

@@ -240,6 +240,7 @@ export const enSettingsPanelPlugins = {
     reset: 'Reset preview',
     restore: 'Restore window',
     sample: 'Sample repository',
+    enableToPreview: 'Enable the plugin to preview it.',
     unavailable: 'Preview unavailable',
     closed: 'Preview window closed',
     updated: 'Preview refreshed',

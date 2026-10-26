@@ -182,6 +182,7 @@ export const zhCNSettingsPanelPlugins = {
     reset: '重置预览',
     restore: '恢复窗口',
     sample: '示例仓库',
+    enableToPreview: '启用插件后才能预览。',
     unavailable: '暂无预览',
     closed: '预览窗口已关闭',
     updated: '预览已刷新',

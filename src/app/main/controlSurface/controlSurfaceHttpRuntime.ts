@@ -285,6 +285,7 @@ export function createControlSurfaceHttpRuntime(
     isRuntimeClosed: () => closed,
     allowQueryToken: options.allowQueryToken === true,
     enableDebugRoutes: options.enableDebugRoutes === true,
+    dropsDirectory: resolve(options.userDataPath, 'drops'),
   })
 
   const runtime: ControlSurfaceHttpRuntime = {

@@ -29,6 +29,9 @@ export const enWebsiteNode = {
   iframeUnavailableTitle: 'This site cannot be shown in the web-compatible viewer',
   iframeUnavailableDetail:
     'Some sites block embedded browsers with their own security policy. Use the full browser in the desktop client for full access.',
+  appOriginRefusedTitle: 'OpenCove does not show itself in a website window',
+  appOriginRefusedDetail:
+    'This address belongs to OpenCove. Embedding it would give the page access to your OpenCove session.',
   enterFullscreen: 'Full screen',
   exitFullscreen: 'Exit full screen',
   close: 'Close',

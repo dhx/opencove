@@ -1,11 +1,4 @@
 import { app, BrowserWindow } from 'electron'
-import {
-  autoUpdater,
-  type AppUpdater,
-  type ProgressInfo,
-  type UpdateDownloadedEvent,
-  type UpdateInfo,
-} from 'electron-updater'
 import type {
   AppUpdateChannel,
   AppUpdatePolicy,
@@ -14,11 +7,23 @@ import type {
   ConfigureAppUpdatesInput,
 } from '../../../../shared/contracts/dto'
 import { IPC_CHANNELS } from '../../../../shared/contracts/ipc'
-import { resolveMacAppBundlePath, resolveMacUpdaterSupport } from './macosUpdaterSupport'
 
 const UPDATE_CHECK_INTERVAL_MS = 1000 * 60 * 60 * 6
 
 type DriverDisposer = () => void
+
+// The fields this service reads from an updater's events (the shape electron-updater used to report).
+interface UpdateInfo {
+  version?: string | null
+  releaseName?: string | null
+  releaseDate?: string | Date | null
+}
+type UpdateDownloadedEvent = UpdateInfo
+interface ProgressInfo {
+  percent: number
+  transferred: number
+  total: number
+}
 
 interface AppUpdateDriver {
   configure(options: {
@@ -148,92 +153,37 @@ function normalizeMessage(error: unknown): string {
   return 'Unknown update error'
 }
 
-function createElectronAppUpdateDriver(updater: AppUpdater): AppUpdateDriver {
-  const emitter = updater as unknown as {
-    on: (event: string, listener: (...args: unknown[]) => void) => void
-    removeListener: (event: string, listener: (...args: unknown[]) => void) => void
-  }
+// This fork's builds never check for updates on their own: there is no update feed, and the updater
+// (electron-updater against GitHub Releases) is not wired in. New versions come from our own releases.
+export const APP_UPDATES_OFF_MESSAGE = 'Automatic updates are off in this build.'
 
-  const listen = <T>(event: string, listener: (payload: T) => void): DriverDisposer => {
-    const handler = (...args: unknown[]) => {
-      listener(args[0] as T)
-    }
-
-    emitter.on(event, handler)
-    return () => {
-      emitter.removeListener(event, handler)
-    }
-  }
-
-  const listenVoid = (event: string, listener: () => void): DriverDisposer => {
-    emitter.on(event, listener)
-    return () => {
-      emitter.removeListener(event, listener)
-    }
-  }
-
+function createNoopAppUpdateDriver(): AppUpdateDriver {
+  const noListener = (): DriverDisposer => () => undefined
   return {
-    configure(options) {
-      updater.autoDownload = options.autoDownload
-      updater.autoInstallOnAppQuit = options.autoInstallOnAppQuit
-      updater.allowPrerelease = options.allowPrerelease
-      updater.channel = options.channel
-    },
-    async checkForUpdates() {
-      await updater.checkForUpdates()
-    },
-    async downloadUpdate() {
-      await updater.downloadUpdate()
-    },
-    quitAndInstall() {
-      updater.quitAndInstall()
-    },
-    onCheckingForUpdate(listener) {
-      return listenVoid('checking-for-update', listener)
-    },
-    onUpdateAvailable(listener) {
-      return listen<UpdateInfo>('update-available', listener)
-    },
-    onUpdateNotAvailable(listener) {
-      return listen<UpdateInfo>('update-not-available', listener)
-    },
-    onDownloadProgress(listener) {
-      return listen<ProgressInfo>('download-progress', listener)
-    },
-    onUpdateDownloaded(listener) {
-      return listen<UpdateDownloadedEvent>('update-downloaded', listener)
-    },
-    onError(listener) {
-      return listen<Error>('error', listener)
-    },
+    configure() {},
+    async checkForUpdates() {},
+    async downloadUpdate() {},
+    quitAndInstall() {},
+    onCheckingForUpdate: noListener,
+    onUpdateAvailable: noListener,
+    onUpdateNotAvailable: noListener,
+    onDownloadProgress: noListener,
+    onUpdateDownloaded: noListener,
+    onError: noListener,
   }
 }
 
 export function createAppUpdateService(
-  driver: AppUpdateDriver = createElectronAppUpdateDriver(autoUpdater),
+  driver: AppUpdateDriver = createNoopAppUpdateDriver(),
   options: AppUpdateServiceOptions = {},
 ): AppUpdateService {
   const currentVersion = app.getVersion()
-  const fallbackUnsupportedMessage =
-    process.env.NODE_ENV === 'test'
-      ? 'Update checks are disabled in tests.'
-      : 'Update checks are only available in packaged builds.'
-  let supportsUpdates =
-    options.supportsUpdates ?? (process.env.NODE_ENV !== 'test' && app.isPackaged)
-  let unsupportedMessage = options.unsupportedMessage ?? fallbackUnsupportedMessage
-
-  if (options.supportsUpdates === undefined && supportsUpdates && process.platform === 'darwin') {
-    const appPath = resolveMacAppBundlePath(app.getPath('exe'))
-    const macSupport = resolveMacUpdaterSupport({ appPath })
-    if (!macSupport.supported) {
-      supportsUpdates = false
-      unsupportedMessage = options.unsupportedMessage ?? macSupport.message ?? unsupportedMessage
-    }
-  }
+  const supportsUpdates = options.supportsUpdates ?? false
+  const unsupportedMessage = options.unsupportedMessage ?? APP_UPDATES_OFF_MESSAGE
 
   let state = buildBaseState(
     currentVersion,
-    'prompt',
+    'off',
     'stable',
     supportsUpdates ? 'idle' : 'unsupported',
     supportsUpdates ? null : unsupportedMessage,

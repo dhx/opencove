@@ -4,7 +4,9 @@
 # build provenance.
 #
 # Tags are dhx/v<version> (e.g. dhx/v0.4.1-dhx-001), so upstream's release.yml (v*) never runs for them.
-# A pull request or a manual run builds and checks without publishing.
+# A release comes from a pushed tag, or from dhx-auto-release.yml once CI is green on main (it calls this
+# workflow with a version and a commit; the GitHub release creates the tag). A pull request or a manual run
+# builds and checks without publishing.
 name: dhx release
 
 on:
@@ -16,6 +18,19 @@ on:
       version:
         description: 'Version to stamp, e.g. 0.4.1-dhx-001 (a manual run only builds and checks)'
         required: true
+  workflow_call:
+    inputs:
+      version:
+        description: 'Version to stamp and release, e.g. 0.4.1-dhx-001'
+        type: string
+        required: true
+      ref:
+        description: 'The commit to build and tag'
+        type: string
+        required: true
+      publish:
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -36,6 +51,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          ref: ${{ inputs.ref || github.sha }}
           persist-credentials: false
 
       - name: Version
@@ -46,7 +62,7 @@ jobs:
         run: |
           case "$REF_NAME" in
             dhx/v*) version="${REF_NAME#dhx/v}" ;;
-            *) version="${INPUT_VERSION:-0.0.0-dhx-000}" ;; # a pull request: a trial build
+            *) version="${INPUT_VERSION:-0.0.0-dhx-000}" ;; # called or manual: given; a pull request: a trial build
           esac
           if ! printf '%s' "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+-dhx-[0-9]{3}$'; then
             echo "version must look like 0.4.1-dhx-001, not $version" >&2; exit 1
@@ -124,7 +140,7 @@ jobs:
           if-no-files-found: error
 
   publish:
-    if: startsWith(github.ref, 'refs/tags/dhx/v')
+    if: startsWith(github.ref, 'refs/tags/dhx/v') || inputs.publish
     needs: build
     runs-on: ubuntu-24.04
     permissions:
@@ -144,8 +160,10 @@ jobs:
       - name: Release
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ github.ref_name }}
           VERSION: ${{ needs.build.outputs.version }}
+          COMMIT: ${{ inputs.ref || github.sha }}
         run: |
-          gh release create "$TAG" release/* --repo "$GITHUB_REPOSITORY" --title "OpenCove $VERSION" \
-            --notes "Server build of this fork at ${GITHUB_SHA}. Verify: sha256sum -c SHA256SUMS.txt, and gh attestation verify opencove-server-linux-x64.tar.gz --repo ${GITHUB_REPOSITORY}."
+          # A pushed tag exists already; for a called release, creating the release creates the tag.
+          gh release create "dhx/v${VERSION}" release/* --repo "$GITHUB_REPOSITORY" --target "$COMMIT" \
+            --title "OpenCove $VERSION" \
+            --notes "Server build of this fork at ${COMMIT}. Verify: sha256sum -c SHA256SUMS.txt, and gh attestation verify opencove-server-linux-x64.tar.gz --repo ${GITHUB_REPOSITORY}."

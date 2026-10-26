@@ -118,9 +118,22 @@ describe('independent plugin control surface and asset leases', () => {
           const html = await response.text()
           expect(html.indexOf('__opencove_bridge.js')).toBeLessThan(html.indexOf('app.js'))
           expect(response.headers.get('referrer-policy')).toBe('no-referrer')
-          expect(response.headers.get('content-security-policy')).not.toMatch(
-            /style-src[^;]*unsafe-inline/,
+          const csp = response.headers.get('content-security-policy') ?? ''
+          expect(csp).not.toMatch(/style-src[^;]*unsafe-inline/)
+          // Views reach only their own files and inline data, never arbitrary hosts: no bare scheme
+          // sources, and the asset host named explicitly (WebKit's 'self' matches nothing in a sandbox).
+          expect(csp).not.toMatch(/(^|\s)(https?|wss?):(?=[\s;]|$)/)
+          const assetHost = new URL(base).host
+          expect(csp).toContain(
+            `connect-src 'self' http://${assetHost} https://${assetHost} ws://${assetHost} wss://${assetHost}`,
           )
+          expect(csp).toContain(`script-src 'self' http://${assetHost} https://${assetHost};`)
+          // Wherever a plugin document is opened, it runs in an opaque origin, never the Web UI's.
+          expect(csp).toMatch(/(^|; )sandbox allow-scripts/)
+          expect(csp).not.toContain('allow-same-origin')
+          // Sandboxed views have an opaque origin; their own module scripts and fetches are CORS requests.
+          expect(response.headers.get('access-control-allow-origin')).toBe('*')
+          expect(response.headers.get('access-control-allow-credentials')).toBeNull()
           expect(html).not.toContain('private-host-secret')
           expect(
             (await fetch(`${base}${opened.resourcePath.replace('ui/index.html', 'ui/app.js')}`))

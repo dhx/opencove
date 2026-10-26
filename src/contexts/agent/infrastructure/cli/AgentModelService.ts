@@ -6,13 +6,11 @@ import type {
 } from '@shared/contracts/dto'
 import { resolveAgentExecutableInvocation } from './AgentExecutableResolver'
 import { disposeCodexModelCatalog, listCodexModelsFromCli } from './CodexModelCatalog'
-import { listGeminiCliFallbackModels, listGeminiCliModelsFromSchema } from './GeminiModelCatalog'
+import { listGeminiCliFallbackModels } from './GeminiModelCatalog'
 import { createAppErrorDescriptor } from '../../../../shared/errors/appError'
 
 const CODEX_MODEL_CACHE_TTL_MS = 30_000
 const CODEX_MODEL_ERROR_CACHE_TTL_MS = 5_000
-const GEMINI_MODEL_CACHE_TTL_MS = 6 * 60 * 60 * 1000
-const GEMINI_MODEL_FALLBACK_CACHE_TTL_MS = 5 * 60 * 1000
 const CLI_MODEL_LIST_TIMEOUT_MS = 8000
 const CLI_MODEL_LIST_MAX_BUFFER_BYTES = 16 * 1024 * 1024
 
@@ -22,14 +20,6 @@ let cachedCodexModels: {
 } | null = null
 
 let codexModelsRequestInFlight: Promise<ListAgentModelsResult> | null = null
-
-let cachedGeminiModels: {
-  result: ListAgentModelsResult
-  expiresAtMs: number
-  isFallback: boolean
-} | null = null
-
-let geminiModelsRequestInFlight: Promise<ListAgentModelsResult> | null = null
 
 const CLAUDE_CODE_STATIC_MODELS: AgentModelOption[] = [
   {
@@ -113,34 +103,6 @@ function readCachedCodexModels(): ListAgentModelsResult | null {
   return cloneListAgentModelsResult(cachedCodexModels.result)
 }
 
-function rememberGeminiModels(
-  result: ListAgentModelsResult,
-  options: { isFallback: boolean },
-): ListAgentModelsResult {
-  cachedGeminiModels = {
-    result: cloneListAgentModelsResult(result),
-    expiresAtMs:
-      Date.now() +
-      (options.isFallback ? GEMINI_MODEL_FALLBACK_CACHE_TTL_MS : GEMINI_MODEL_CACHE_TTL_MS),
-    isFallback: options.isFallback,
-  }
-
-  return cloneListAgentModelsResult(result)
-}
-
-function readCachedGeminiModels(): ListAgentModelsResult | null {
-  if (!cachedGeminiModels) {
-    return null
-  }
-
-  if (Date.now() > cachedGeminiModels.expiresAtMs) {
-    cachedGeminiModels = null
-    return null
-  }
-
-  return cloneListAgentModelsResult(cachedGeminiModels.result)
-}
-
 async function executeCliText(options: {
   provider: AgentProviderId
   args: string[]
@@ -206,8 +168,6 @@ function listClaudeCodeStaticModels(): AgentModelOption[] {
 export function disposeAgentModelService(): void {
   codexModelsRequestInFlight = null
   cachedCodexModels = null
-  geminiModelsRequestInFlight = null
-  cachedGeminiModels = null
 
   disposeCodexModelCatalog()
 }
@@ -281,47 +241,13 @@ export async function listAgentModels(options: {
   }
 
   if (provider === 'gemini') {
-    const cachedResult = readCachedGeminiModels()
-    if (cachedResult) {
-      return cachedResult
+    return {
+      provider,
+      source: 'gemini-cli',
+      fetchedAt: new Date().toISOString(),
+      models: listGeminiCliFallbackModels(),
+      error: null,
     }
-
-    if (!geminiModelsRequestInFlight) {
-      geminiModelsRequestInFlight = (async () => {
-        const fetchedAt = new Date().toISOString()
-
-        try {
-          const models = await listGeminiCliModelsFromSchema()
-          const isFallback = models.length === 0
-
-          return rememberGeminiModels(
-            {
-              provider,
-              source: 'gemini-cli',
-              fetchedAt,
-              models: models.length > 0 ? models : listGeminiCliFallbackModels(),
-              error: null,
-            },
-            { isFallback },
-          )
-        } catch {
-          return rememberGeminiModels(
-            {
-              provider,
-              source: 'gemini-cli',
-              fetchedAt,
-              models: listGeminiCliFallbackModels(),
-              error: null,
-            },
-            { isFallback: true },
-          )
-        } finally {
-          geminiModelsRequestInFlight = null
-        }
-      })()
-    }
-
-    return cloneListAgentModelsResult(await geminiModelsRequestInFlight)
   }
 
   const fetchedAt = new Date().toISOString()

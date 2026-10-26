@@ -176,40 +176,9 @@ describe('AgentModelService', () => {
     ])
   })
 
-  it('returns Gemini models parsed from the settings schema', async () => {
+  it('returns the built-in Gemini models without any network request', async () => {
     const fetchMock = vi.fn(async () => {
-      return {
-        ok: true,
-        status: 200,
-        statusText: 'OK',
-        json: async () => {
-          return {
-            properties: {
-              modelConfigs: {
-                default: {
-                  modelDefinitions: {
-                    'gemini-3.1-pro-preview': { isVisible: true },
-                    'gemini-3-pro-preview': { isVisible: true },
-                    'gemini-3-flash-preview': { isVisible: true },
-                    'gemini-2.5-pro': { isVisible: true },
-                    'gemini-2.5-flash': { isVisible: true },
-                    'gemini-2.5-flash-lite': { isVisible: true },
-                    'auto-gemini-3': { isVisible: true },
-                    'auto-gemini-2.5': { isVisible: true },
-                    internal: { isVisible: false },
-                  },
-                  modelIdResolutions: {
-                    auto: { default: 'gemini-3-pro-preview' },
-                    pro: { default: 'gemini-3-pro-preview' },
-                    flash: { default: 'gemini-3-flash-preview' },
-                    'flash-lite': { default: 'gemini-2.5-flash-lite' },
-                  },
-                },
-              },
-            },
-          }
-        },
-      }
+      throw new Error('unexpected network request')
     })
 
     vi.stubGlobal('fetch', fetchMock as never)
@@ -218,7 +187,7 @@ describe('AgentModelService', () => {
       const { listAgentModels } = await importAgentModelService()
       const result = await listAgentModels({ provider: 'gemini' })
 
-      expect(fetchMock).toHaveBeenCalledTimes(1)
+      expect(fetchMock).not.toHaveBeenCalled()
       expect(result.provider).toBe('gemini')
       expect(result.source).toBe('gemini-cli')
       expect(result.error).toBeNull()

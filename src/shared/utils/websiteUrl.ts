@@ -57,3 +57,41 @@ export function resolveWebsitePasteUrl(rawUrl: string): {
 
   return resolveWebsiteNavigationUrl(`https://${trimmed}`)
 }
+
+const LOOPBACK_HOSTNAMES = new Set(['localhost', '[::1]', '0.0.0.0', '[::]'])
+
+function isLoopbackHostname(hostname: string): boolean {
+  const host = hostname.toLowerCase().replace(/\.$/, '')
+  return LOOPBACK_HOSTNAMES.has(host) || host.endsWith('.localhost') || /^127\./.test(host)
+}
+
+function effectivePort(url: URL): string {
+  return url.port || (url.protocol === 'https:' ? '443' : '80')
+}
+
+/**
+ * A website node must not show the app itself: an embedded page on the app's host would share its
+ * cookies (cookies are per host, not per port or scheme) and, being same-origin, could script the app.
+ * Refused: any URL on the app page's hostname, and loopback URLs on the app's port (the worker itself,
+ * reached under another loopback name). Only applies when the app is served over http(s).
+ */
+export function isWebsiteUrlOnAppOrigin(rawUrl: string, appUrl: string): boolean {
+  let target: URL
+  let app: URL
+  try {
+    target = new URL(rawUrl)
+    app = new URL(appUrl)
+  } catch {
+    return false
+  }
+  if (
+    !ALLOWED_WEBSITE_PROTOCOLS.has(app.protocol) ||
+    !ALLOWED_WEBSITE_PROTOCOLS.has(target.protocol)
+  ) {
+    return false
+  }
+  if (target.hostname.toLowerCase() === app.hostname.toLowerCase()) {
+    return true
+  }
+  return isLoopbackHostname(target.hostname) && effectivePort(target) === effectivePort(app)
+}

@@ -16,6 +16,7 @@ const view: PluginOpenViewResult = {
     preview: false,
   },
 }
+const SESSION = 'ab'.repeat(16)
 const disposers: Array<() => void> = []
 afterEach(() => {
   disposers.splice(0).forEach(dispose => dispose())
@@ -32,11 +33,14 @@ function setup(preview = false) {
     value: { controlSurface: { invoke } },
   })
   const post = vi.spyOn(frame.contentWindow!, 'postMessage').mockImplementation(() => {})
+  vi.spyOn(globalThis.crypto, 'getRandomValues').mockImplementation(array => {
+    ;(array as Uint8Array).fill(0xab)
+    return array
+  })
   const title = vi.fn()
   const restore = vi.fn()
   const dispose = bindPluginViewBridge({
     view: { ...view, context: { ...view.context, preview } },
-    url: 'http://127.0.0.1:9012/plugin-assets/lease/ui/index.html',
     getFrame: () => frame,
     onTitleChange: title,
     onRestore: restore,
@@ -44,14 +48,14 @@ function setup(preview = false) {
   disposers.push(dispose)
   const send = (
     data: Record<string, unknown>,
-    origin = 'http://127.0.0.1:9012',
+    origin = 'null',
     source: Window | null = frame.contentWindow,
   ) => {
     window.dispatchEvent(
       new MessageEvent('message', {
         source,
         origin,
-        data: { channel: 'opencove-plugin-v1', ...data },
+        data: { channel: 'opencove-plugin-v1', session: SESSION, ...data },
       }),
     )
   }
@@ -73,7 +77,11 @@ describe('plugin view bridge authority and lifetime', () => {
       },
     }
     send(request, 'https://unexpected.example')
-    send(request, 'http://127.0.0.1:9012', window)
+    // The frame is sandboxed without allow-same-origin: its real messages come from the opaque origin.
+    send(request, 'http://127.0.0.1:9012')
+    send(request, 'null', window)
+    send({ ...request, session: 'guessed' })
+    send({ ...request, session: undefined })
     expect(invoke).not.toHaveBeenCalled()
     send(request)
     await vi.waitFor(() => expect(post).toHaveBeenCalled())
@@ -83,6 +91,26 @@ describe('plugin view bridge authority and lifetime', () => {
       payload: { viewId: 'host-owned-view', method: 'read', params: {} },
     })
     expect(post.mock.calls[0][0]).toMatchObject({ type: 'result', id: '1', value: { answer: 42 } })
+  })
+
+  it('hands the session out once, so a page the frame navigates to cannot take over the view', async () => {
+    const { send, post, invoke } = setup()
+    send({ type: 'ready', session: undefined })
+    expect(post).toHaveBeenCalledOnce()
+    expect(post.mock.calls[0][0]).toMatchObject({ type: 'init', session: SESSION })
+    // An opaque-origin frame can only be addressed with '*'.
+    expect(post.mock.calls[0][1]).toBe('*')
+    send({ type: 'ready', session: undefined })
+    expect(post).toHaveBeenCalledOnce()
+    send({
+      type: 'request',
+      id: 'x',
+      operation: 'invoke',
+      payload: { method: 'read' },
+      session: undefined,
+    })
+    await Promise.resolve()
+    expect(invoke).not.toHaveBeenCalled()
   })
 
   it('sends theme and title updates only to its own view without reopening it', async () => {
@@ -212,7 +240,8 @@ describe('plugin view bridge authority and lifetime', () => {
   it('accepts a restore only once from the owned frame and retires its old bridge', () => {
     const { send, restore, invoke, post, dispose } = setup()
     send({ type: 'restore' }, 'https://another.example')
-    send({ type: 'restore' }, 'http://127.0.0.1:9012', window)
+    send({ type: 'restore' }, 'null', window)
+    send({ type: 'restore', session: 'guessed' })
     send({ type: 'restore', channel: 'another-channel' })
     expect(restore).not.toHaveBeenCalled()
     send({ type: 'restore' })

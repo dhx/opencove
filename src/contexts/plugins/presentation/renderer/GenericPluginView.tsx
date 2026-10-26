@@ -6,6 +6,8 @@ import { bindPluginViewBridge } from './pluginViewBridge'
 import { pluginErrorMessage } from './pluginErrorMessage'
 import './generic-plugin-view.css'
 
+export const PLUGIN_VIEW_IFRAME_SANDBOX = 'allow-scripts allow-popups allow-downloads allow-forms'
+
 export interface GenericPluginViewProps {
   plugin: PluginManifest
   nodeId: string
@@ -65,7 +67,6 @@ export function GenericPluginView({
       }
       unbind = bindPluginViewBridge({
         view,
-        url,
         getFrame: () => frameRef.current,
         onTitleChange: title => titleCallback.current?.(title),
         onRestore: () => setAttempt(value => value + 1),
@@ -109,8 +110,10 @@ export function GenericPluginView({
           src={source}
           title={plugin.displayName}
           allow="autoplay; clipboard-write"
-          // eslint-disable-next-line react/iframe-missing-sandbox -- Trusted plugin views require an origin-checked SDK and module resources; these flags prevent accidental top navigation, not privileged-code access.
-          sandbox="allow-scripts allow-same-origin allow-popups allow-downloads allow-forms"
+          // No allow-same-origin: the view runs in an opaque origin, so plugin script cannot reach this
+          // page, its storage or the control surface with the user's session. It talks to OpenCove only
+          // through the postMessage bridge (pluginViewBridge.ts).
+          sandbox={PLUGIN_VIEW_IFRAME_SANDBOX}
           referrerPolicy="no-referrer"
           data-testid={`plugin-frame-${plugin.id}`}
         />
