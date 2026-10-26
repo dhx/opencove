@@ -1,4 +1,5 @@
 import type { PtyStreamMessage } from './remotePtyStreamMessage'
+import { parseTerminalForegroundEvent } from '../../../../shared/runtime/terminalForegroundEvent'
 import { normalizePiStateObservationMetadata } from '../../../../shared/runtime/piConversation'
 import { normalizePiAgentSnapshot } from '../../../../shared/runtime/piAgentSnapshot'
 import { isAgentHookStateSource } from '../../../../shared/runtime/agentHookStateSource'
@@ -105,68 +106,8 @@ export function parseTerminalGeometryCommitResult(
   }
 }
 
-export function parseTerminalForegroundEvent(
-  record: Record<string, unknown>,
-): TerminalForegroundEvent | null {
-  const sessionId = normalizeOptionalString(record.sessionId)
-  const observedAtMs = normalizeOptionalFiniteInt(record.observedAtMs)
-  const source =
-    record.source === 'process_scan' ||
-    record.source === 'windows_exit_code' ||
-    record.source === 'windows_prompt_timeout'
-      ? record.source
-      : null
-  const availability =
-    record.availability === 'available' || record.availability === 'unavailable'
-      ? record.availability
-      : null
-  const agent = record.agent === 'codex' || record.agent === null ? record.agent : undefined
-  const exitCode = record.exitCode === null ? null : normalizeOptionalFiniteInt(record.exitCode)
-  if (
-    !sessionId ||
-    observedAtMs === null ||
-    observedAtMs < 0 ||
-    !source ||
-    !availability ||
-    agent === undefined ||
-    typeof record.shellOnly !== 'boolean' ||
-    (record.exitCode !== null && exitCode === null)
-  ) {
-    return null
-  }
-
-  const base = {
-    sessionId,
-    observedAtMs,
-  }
-  if (source === 'process_scan' && exitCode === null) {
-    if (availability === 'available') {
-      return { ...base, source, exitCode, availability, agent, shellOnly: record.shellOnly }
-    }
-    if (agent === null && record.shellOnly === false) {
-      return { ...base, source, exitCode, availability, agent, shellOnly: false }
-    }
-  }
-  if (
-    source === 'windows_exit_code' &&
-    exitCode !== null &&
-    availability === 'unavailable' &&
-    agent === null &&
-    record.shellOnly === false
-  ) {
-    return { ...base, source, exitCode, availability, agent, shellOnly: false }
-  }
-  if (
-    source === 'windows_prompt_timeout' &&
-    exitCode === null &&
-    availability === 'unavailable' &&
-    agent === null &&
-    record.shellOnly === false
-  ) {
-    return { ...base, source, exitCode, availability, agent, shellOnly: false }
-  }
-  return null
-}
+// Shared with the Web UI's pty client (src/app/renderer/browser/BrowserPtyClient.ts).
+export { parseTerminalForegroundEvent }
 
 export function createRemotePtyStreamMessageHandler(options: {
   attachedSessions: Map<string, AttachedSessionState>

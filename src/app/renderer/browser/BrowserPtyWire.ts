@@ -1,5 +1,7 @@
 import { normalizePiStateObservationMetadata } from '@shared/runtime/piConversation'
 import { isAgentHookStateSource } from '../../../shared/runtime/agentHookStateSource'
+import { parseTerminalForegroundEvent } from '@shared/runtime/terminalForegroundEvent'
+import type { TerminalForegroundEvent } from '@shared/contracts/dto'
 export type BrowserPtyListenerMap<TEvent> = Set<(event: TEvent) => void>
 
 export function normalizeBrowserPtyAttachAfterSeq(value: unknown): number | null {
@@ -16,6 +18,28 @@ export function emitBrowserPtyEvent<TEvent>(
   listeners.forEach(listener => {
     listener(event)
   })
+}
+
+export function subscribeBrowserPtyEvent<TEvent>(
+  listeners: BrowserPtyListenerMap<TEvent>,
+  listener: (event: TEvent) => void,
+): () => void {
+  listeners.add(listener)
+  return () => {
+    listeners.delete(listener)
+  }
+}
+
+// The worker reports which program holds a terminal's foreground (e.g. an agent exited back to the
+// shell); terminal agent overlays reconcile on it like the desktop app does.
+export function emitBrowserPtyForeground(
+  listeners: BrowserPtyListenerMap<TerminalForegroundEvent>,
+  record: Record<string, unknown>,
+): void {
+  const event = parseTerminalForegroundEvent(record)
+  if (event) {
+    emitBrowserPtyEvent(listeners, event)
+  }
 }
 
 export function normalizeBrowserPtySessionState(

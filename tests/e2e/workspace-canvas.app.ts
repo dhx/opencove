@@ -3,6 +3,7 @@ import { once } from 'node:events'
 import { mkdir, rm } from 'node:fs/promises'
 import path from 'path'
 import { createTestUserDataDir } from './workspace-canvas.testUtils'
+import { isWebE2ETarget, launchWebApp } from './webTarget/webTargetLaunch'
 
 const electronAppPath = path.resolve(__dirname, '../../')
 const testAgentStubScriptPath = path.resolve(__dirname, '../../scripts/test-agent-session-stub.mjs')
@@ -375,6 +376,10 @@ export async function launchApp(options?: {
   deviceScaleFactor?: number
   recordVideo?: E2EVideoOptions
 }): Promise<{ electronApp: ElectronApplication; window: Page }> {
+  if (isWebE2ETarget()) {
+    return await launchWebApp(options)
+  }
+
   const launchModes = resolveLaunchModes(options?.windowMode)
   return await launchAppWithModes(launchModes, options)
 }
