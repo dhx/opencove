@@ -18,6 +18,7 @@ const WORKER_LOG_TAIL_LINES = 40
 export interface StartedWebTargetWorker {
   baseUrl: string
   token: string
+  process: ChildProcess
   stop: () => Promise<void>
   logTail: () => string
 }
@@ -191,7 +192,13 @@ export async function startWebTargetWorker(options: {
     await stopPromise
   }
 
-  return { baseUrl: `http://${ready.hostname}:${ready.port}`, token, stop, logTail }
+  return {
+    baseUrl: `http://${ready.hostname}:${ready.port}`,
+    token,
+    process: child,
+    stop,
+    logTail,
+  }
 }
 
 export async function issueWebSessionTicket(baseUrl: string, token: string): Promise<string> {

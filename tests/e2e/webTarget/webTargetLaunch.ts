@@ -142,7 +142,14 @@ export async function launchWebApp(
       timeout: WEB_UI_LOAD_TIMEOUT_MS,
     })
 
-    return { electronApp: createElectronStandIn(close), window: page }
+    const electronApp = createElectronStandIn({
+      close,
+      context: () => context,
+      page: () => page,
+      workerProcess: worker.process,
+      userDataDir,
+    })
+    return { electronApp, window: page }
   } catch (error) {
     const tail = worker.logTail()
     await close()
