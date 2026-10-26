@@ -14,6 +14,7 @@ import type {
   TerminalAgentReexecInput,
   TerminalAgentReexecResult,
   TerminalExitEvent,
+  TerminalForegroundEvent,
   TerminalGeometryEvent,
   TerminalGeometryCommitResult,
   TerminalResyncEvent,
@@ -31,9 +32,11 @@ import { BrowserPtyClientAgentReexec } from './BrowserPtyClientAgentReexec'
 import { parseBrowserPtyMetadata } from './BrowserPtyMetadata'
 import {
   emitBrowserPtyEvent,
+  emitBrowserPtyForeground,
   normalizeBrowserPtyPositiveInt,
   normalizeBrowserPtySessionState,
   normalizeBrowserPtyStateMetadata,
+  subscribeBrowserPtyEvent,
 } from './BrowserPtyWire'
 
 type UnsubscribeFn = () => void
@@ -68,6 +71,7 @@ export class BrowserPtyClient {
   private readonly resyncListeners = new Set<(event: TerminalResyncEvent) => void>()
   private readonly stateListeners = new Set<(event: TerminalSessionStateEvent) => void>()
   private readonly metadataListeners = new Set<(event: TerminalSessionMetadataEvent) => void>()
+  private readonly foregroundListeners = new Set<(event: TerminalForegroundEvent) => void>()
   private readonly stateReplay = new BrowserPtyClientStateReplay()
   private readonly latestMetadataBySessionId = new Map<string, TerminalSessionMetadataEvent>()
   private readonly metadataWatcher = new BrowserPtyClientMetadataWatcher({
@@ -221,6 +225,11 @@ export class BrowserPtyClient {
       Object.assign(eventPayload, normalizeBrowserPtyStateMetadata(record))
       this.stateReplay.register(eventPayload)
       emitBrowserPtyEvent(this.stateListeners, eventPayload)
+      return
+    }
+
+    if (type === 'foreground') {
+      emitBrowserPtyForeground(this.foregroundListeners, record)
       return
     }
 
@@ -480,5 +489,9 @@ export class BrowserPtyClient {
     return () => {
       this.metadataListeners.delete(listener)
     }
+  }
+
+  public onForeground(listener: (event: TerminalForegroundEvent) => void): UnsubscribeFn {
+    return subscribeBrowserPtyEvent(this.foregroundListeners, listener)
   }
 }
