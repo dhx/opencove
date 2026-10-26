@@ -1,5 +1,10 @@
 import { uploadDroppedFileToWorker } from './browserFileDrop'
 import {
+  deleteCanvasImageOnWorker,
+  readCanvasImageFromWorker,
+  writeCanvasImageToWorker,
+} from './browserCanvasImages'
+import {
   normalizeReadFileBytesResult,
   type ListSystemFontsResult,
   type SaveTextToDownloadsInput,
@@ -297,11 +302,9 @@ export function installBrowserOpenCoveApi(): void {
       },
       listPathOpeners: async () => unsupportedPathOpeners(),
       openPath: async () => undefined,
-      writeCanvasImage: async () => {
-        throw new Error('Canvas image uploads are unavailable in browser runtime')
-      },
-      readCanvasImage: async () => null,
-      deleteCanvasImage: async () => undefined,
+      writeCanvasImage: writeCanvasImageToWorker,
+      readCanvasImage: readCanvasImageFromWorker,
+      deleteCanvasImage: deleteCanvasImageOnWorker,
     },
     worktree: {
       listBranches: async payload =>
