@@ -144,3 +144,61 @@ jobs:
         run: |
           if [ -n "${RUNNER_TEMP:-}" ]; then rm -rf "${RUNNER_TEMP}/opencove-web-canvas" || true; fi
           rm -rf "/tmp/opencove-web-canvas" || true
+
+  # The Electron E2E suite (tests/e2e) against the worker and its Web UI in Chromium
+  # (OPENCOVE_E2E_TARGET=web, playwright.e2e-web.config.ts; docs/dhx/RELEASES.md). Releases wait for it.
+  e2e-web:
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4, 5, 6, 7, 8]
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 9.6.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # The runner image already has Chromium's system libraries; `--with-deps` (apt) can take minutes.
+      - name: Install Chromium
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: ''
+        run: pnpm exec playwright install --only-shell chromium
+
+      - name: Build
+        run: pnpm build
+
+      - name: E2E tests on the Web UI (shard)
+        timeout-minutes: 30
+        env:
+          OPENCOVE_E2E_RETRIES: '0'
+        run: pnpm exec playwright test -c playwright.e2e-web.config.ts --shard=${{ matrix.shard }}/8
+
+      - name: Upload Playwright artifacts
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-artifacts-e2e-web-shard-${{ matrix.shard }}
+          path: |
+            test-results-e2e-web/
+          retention-days: 7
+
+      - name: Cleanup E2E temp dirs
+        if: always()
+        run: |
+          if [ -n "${RUNNER_TEMP:-}" ]; then rm -rf "${RUNNER_TEMP}/opencove-e2e" || true; fi
+          rm -rf "/mnt/opencove-e2e" "/tmp/opencove-e2e" || true

@@ -387,7 +387,7 @@ export function installBrowserOpenCoveApi(): void {
       debugCrashHost: () => ptyClient.debugCrashHost(),
       onData: listener => ptyClient.onData(listener),
       onExit: listener => ptyClient.onExit(listener),
-      onForeground: () => () => undefined,
+      onForeground: listener => ptyClient.onForeground(listener),
       onGeometry: listener => ptyClient.onGeometry(listener),
       onResync: listener => ptyClient.onResync(listener),
       onState: listener => ptyClient.onState(listener),
