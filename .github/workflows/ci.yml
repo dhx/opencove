@@ -147,17 +147,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4, 5, 6]
+        shard: [1, 2, 3, 4, 5, 6, 7, 8]
 
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
         uses: actions/checkout@v7
-
-      - name: Free disk space
-        run: |
-          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/share/swift || true
 
       - name: Install pnpm
         uses: pnpm/action-setup@v6
@@ -173,10 +169,11 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # The runner image already has Chromium's system libraries; `--with-deps` (apt) can take minutes.
       - name: Install Chromium
         env:
           PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: ''
-        run: pnpm exec playwright install --with-deps chromium
+        run: pnpm exec playwright install --only-shell chromium
 
       - name: Build
         run: pnpm build
@@ -185,10 +182,10 @@ jobs:
         timeout-minutes: 30
         env:
           OPENCOVE_E2E_RETRIES: '0'
-        run: pnpm exec playwright test -c playwright.e2e-web.config.ts --shard=${{ matrix.shard }}/6
+        run: pnpm exec playwright test -c playwright.e2e-web.config.ts --shard=${{ matrix.shard }}/8
 
       - name: Upload Playwright artifacts
-        if: always()
+        if: failure()
         uses: actions/upload-artifact@v7
         with:
           name: playwright-artifacts-e2e-web-shard-${{ matrix.shard }}
