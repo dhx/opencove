@@ -47,7 +47,8 @@ git tag dhx/v0.4.1-dhx-001 && git push origin dhx/v0.4.1-dhx-001
     `NODE_SHA256`). Upstream bundles whatever Node the runner happens to have.
   - Build images are pinned by digest, actions by commit, packages by `pnpm-lock.yaml`.
 - **Upstream's cheap gates:** `secrets:scan`, `lint`, `format:check`, `check`, unit tests. The E2E suites
-  run in upstream's CI on pull requests.
+  run in CI; releases wait for the web ones, including upstream's Electron suite run against the Web UI
+  (below).
 - **`scripts/dhx/check-release-bundle.mjs`:** none of the markers in its `FORBIDDEN` list appear in the
   bundled code. That covers telemetry, analytics and crash-reporting SDKs and hosts, plus everything our
   changes removed. When a change removes something, add it there, so it can't come back unnoticed in an
@@ -58,6 +59,41 @@ git tag dhx/v0.4.1-dhx-001 && git push origin dhx/v0.4.1-dhx-001
   - It is used the way a person uses it, then left idle.
   - Any attempt to connect or resolve anything but loopback fails the release.
 - **Upstream's container smoke test** of the bundle.
+
+## The Electron suite on the Web UI
+
+Upstream's end-to-end suite (`tests/e2e`) drives the Electron desktop app. We ship the worker with its Web
+UI, so CI also runs that suite against the Web UI: the `e2e-web` job in `ci.yml` (8 shards), which releases
+wait for.
+
+- **How:** with `OPENCOVE_E2E_TARGET=web` (set by `playwright.e2e-web.config.ts`), `launchApp()` in
+  `tests/e2e/workspace-canvas.app.ts` starts a fresh worker from the build (own user data dir and approved
+  test roots), opens its Web UI in headless Chromium through a `/auth/claim` ticket and hands the spec that
+  page as `window`. `electronApp.close()` stops worker and browser. A few main-process calls have web
+  stand-ins (window size = viewport, clipboard = the page's, `app.quit()` = close, `process()` = the
+  worker); every other Electron call fails with "Electron-only (OPENCOVE_E2E_TARGET=web)". Relaunching on
+  the same user data dir restarts the worker on the same data and port. The harness is in
+  `tests/e2e/webTarget/`; spec files are upstream's, unchanged.
+- **Skip list:** `tests/e2e/webTarget/skips.ts`, one entry per file or test with a category and a reason.
+  `tests/unit/e2e/webTargetSkips.spec.ts` fails when an entry names a file or title that no longer exists.
+  Of the suite's 555 tests, 50 are on it: 33 Electron-only (main process, native website windows,
+  system opening, desktop and Web UI side by side), 10 Web UI gaps (they seed images through the canvas
+  images API the Web UI does not have yet), 3 desktop-only features (issue report, release notes, open in
+  file manager), 2 Electron-native input (image paste, OS file drop; web tests cover the Web UI's own
+  path), 1 refused by design (a workspace inside the worker's user data dir) and 1 Web UI bug (keys typed
+  right after Ctrl+Shift+V overtake the pasted text). Another 98 skip themselves (Windows/macOS-only
+  tests). `OPENCOVE_E2E_WEB_NO_SKIPS=1` runs the listed tests too.
+- **Run it locally:**
+
+  ```sh
+  pnpm build
+  pnpm exec playwright install --only-shell chromium
+  pnpm exec playwright test -c playwright.e2e-web.config.ts tests/e2e/command-center.spec.ts
+  ```
+
+  `OPENCOVE_E2E_WEB_SERVER_DIR=<unpacked opencove-server-linux-x64>` runs a release bundle's own Node and
+  app instead of the build (the worker otherwise runs under Electron's Node, like the web canvas suite).
+  `OPENCOVE_E2E_PIPE_ELECTRON_LOGS=1` shows the worker's log.
 
 ## Staying with upstream
 
@@ -82,4 +118,5 @@ merge, and a returning phone-home shows up in the checks.
 | No auto-update, no GitHub plugin catalog unless `OPENCOVE_PLUGIN_CATALOG=1`, no default upstream downloads for managed SSH, no Gemini schema fetch, spellcheck off, issue reports to this fork; plugin views in an opaque origin, website nodes refuse the UI's own origin | Nothing contacts third parties on its own; plugin and website content cannot act as the UI (#3) |
 | Token and password from env or file (not argv, not printed), no `?token=` unless enabled, Origin check for bearer requests, JSON and size limit on `/invoke`, `/debug/shell` off, security headers, Secure cookie behind TLS, no open bind without a password, database files 0600 | The worker's credentials stay out of process lists and logs; a token-injecting proxy is safe (#4) |
 | Agents without permission bypass unless `OPENCOVE_AGENT_FULL_ACCESS` allows it; no executable/env overrides from the API; `approveRoot` refuses `/`, home and secret folders; SSH host/user validated; terminal shims send only what they need (`OPENCOVE_TERMINAL_AGENT_SHIMS=0` turns them off); no startup rewrite of `~/.claude`/`~/.codex`; private OpenCode config | Agents and API callers cannot escalate on their own (#5) |
+| Upstream's Electron E2E suite also runs against the Web UI (`e2e-web` in `ci.yml`, `tests/e2e/webTarget/`, `playwright.e2e-web.config.ts`); Electron-only tests are in a checked skip list. The Web UI passes terminal foreground events to agent overlays | Releases are gated on what we ship, not on the desktop app; the suite found the missing foreground events (#9) |
 | Canvas images in the Web UI: the worker keeps them as the desktop app does (`<userData>/canvas-images/<assetId>`) behind `PUT`/`GET`/`DELETE /canvas-images/<assetId>` | Pasting or dropping an image onto the canvas failed in the Web UI ("Canvas image uploads are unavailable") (#12) |
