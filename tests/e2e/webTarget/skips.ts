@@ -10,6 +10,7 @@
 // - electron-native-input: relies on Electron's clipboard/nativeImage or native file paths for input
 //   (image paste, OS file drop); the Web UI's own path is covered by a web test in tests/e2e-web-canvas.
 // - desktop-only-feature: a feature the Web UI does not offer by decision (e.g. the issue report).
+// - by-design: the fork's worker or Web UI refuses what the spec does on purpose (docs/dhx/RELEASES.md).
 // - web-ui-gap: the Web UI lacks an API the spec uses to set up its scene; remove the entry when the
 //   Web UI gains it (canvas images are being added).
 // - web-ui-bug: a real difference in the Web UI that should be fixed there (listed in RELEASES.md).
@@ -19,6 +20,7 @@ export type WebTargetSkipCategory =
   | 'electron-only'
   | 'electron-native-input'
   | 'desktop-only-feature'
+  | 'by-design'
   | 'web-ui-gap'
   | 'web-ui-bug'
   | 'known-failing'
@@ -172,6 +174,13 @@ export const webTargetSkips: WebTargetSkip[] = [
     title: 'shows the open-in-file-manager action in the project context menu',
     category: 'desktop-only-feature',
     reason: 'Opening a folder in the local file manager is a desktop action',
+  },
+  // By design in this fork
+  {
+    file: 'recovery.claude-session-ownership.spec.ts',
+    category: 'by-design',
+    reason:
+      "Keeps its workspace inside the worker's user data dir; the worker refuses to approve such a root over its API (the desktop app approves it directly)",
   },
   // Web UI gaps
   { file: 'workspace-canvas.collapse.spec.ts', category: 'web-ui-gap', reason: CANVAS_IMAGE_SEED },

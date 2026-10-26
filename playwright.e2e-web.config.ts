@@ -15,12 +15,14 @@ function escapeRegExp(value: string): string {
 
 // Playwright matches grep against "<project> <file> <describe titles> <test title> <tags>"; a skip's
 // title may be a fragment of a templated test title.
-const skippedTests = webTargetSkips
+// OPENCOVE_E2E_WEB_NO_SKIPS=1 runs the skipped tests too, e.g. to see whether a gap has closed.
+const activeSkips = process.env['OPENCOVE_E2E_WEB_NO_SKIPS'] === '1' ? [] : webTargetSkips
+const skippedTests = activeSkips
   .filter(skip => typeof skip.title === 'string')
   .map(
     skip => new RegExp(`(^|\\s)${escapeRegExp(skip.file)}\\s.*${escapeRegExp(skip.title ?? '')}`),
   )
-const skippedFiles = webTargetSkips
+const skippedFiles = activeSkips
   .filter(skip => typeof skip.title !== 'string')
   .map(skip => `**/${skip.file}`)
 
