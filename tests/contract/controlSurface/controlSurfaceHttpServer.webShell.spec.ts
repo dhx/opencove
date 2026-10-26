@@ -145,13 +145,13 @@ describe('Control Surface HTTP server (worker web surfaces)', () => {
       const rootRes = await fetch(`${baseUrl}/`)
       expect(rootRes.status).toBe(200)
       const rootHtml = await rootRes.text()
-      expect(rootHtml).toContain('<title>OpenCove Web</title>')
+      expect(rootHtml).toContain('<title>Session Desk</title>')
       expect(rootHtml).toContain('<div id="root"></div>')
 
       const canvasRouteRes = await fetch(`${baseUrl}/canvas`)
       expect(canvasRouteRes.status).toBe(200)
       const canvasRouteHtml = await canvasRouteRes.text()
-      expect(canvasRouteHtml).toContain('<title>OpenCove Web</title>')
+      expect(canvasRouteHtml).toContain('<title>Session Desk</title>')
       expect(canvasRouteHtml).toContain('<div id="root"></div>')
 
       const debugShellRes = await fetch(`${baseUrl}/debug/shell`)

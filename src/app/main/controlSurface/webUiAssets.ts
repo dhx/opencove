@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { extname, resolve } from 'node:path'
+import { FAVICON_DATA_URI, PRODUCT_NAME } from '../../../shared/brand/brand'
 
 function resolveDevRendererOrigin(): string | null {
   const raw = process.env['ELECTRON_RENDERER_URL']?.trim()
@@ -82,8 +83,8 @@ function renderDevWebUiHtml(devOrigin: string): string {
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>OpenCove Web</title>
-    <link rel="icon" href="data:," />
+    <title>${PRODUCT_NAME}</title>
+    <link rel="icon" type="image/svg+xml" href="${FAVICON_DATA_URI}" />
     <script type="module">
       import RefreshRuntime from '${devOrigin}/@react-refresh'
       RefreshRuntime.injectIntoGlobalHook(window)
