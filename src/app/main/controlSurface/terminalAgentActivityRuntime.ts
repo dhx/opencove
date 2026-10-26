@@ -11,7 +11,10 @@ import { createBuiltinAgentProviderContributions } from '../../../contexts/agent
 import type { AgentHookChannel } from '../../../shared/runtime/agentHook/agentHookChannel'
 import { TerminalAgentActivityGateway } from '../../../contexts/agent/infrastructure/terminal-activity/TerminalAgentActivityGateway'
 import { TerminalAgentTelemetryAssetStore } from '../../../contexts/agent/infrastructure/terminal-activity/TerminalAgentTelemetryAssetStore'
-import { TerminalAgentActivityEnvironmentService } from '../../../contexts/agent/infrastructure/terminal-activity/TerminalAgentActivityEnvironmentService'
+import {
+  areTerminalAgentShimsEnabled,
+  TerminalAgentActivityEnvironmentService,
+} from '../../../contexts/agent/infrastructure/terminal-activity/TerminalAgentActivityEnvironmentService'
 import { TerminalAgentInvocationRegistry } from '../../../contexts/agent/application/TerminalAgentInvocationRegistry'
 
 export function createTerminalAgentActivityRuntime(options: {
@@ -62,6 +65,7 @@ export function createTerminalAgentActivityRuntime(options: {
     inheritedPath: process.env.PATH ?? '',
     inheritedShell: process.env.SHELL ?? (process.platform === 'win32' ? 'cmd.exe' : '/bin/sh'),
     platform: process.platform,
+    enabled: areTerminalAgentShimsEnabled(process.env),
   })
   const metadataSources = [...options.agentHookChannels, invocationRegistry]
   const hookStart = Promise.all(

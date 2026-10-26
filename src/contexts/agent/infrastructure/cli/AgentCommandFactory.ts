@@ -69,7 +69,7 @@ function appendCodexAccessArgs(args: string[], agentFullAccess: boolean): void {
 export function buildAgentLaunchCommand(input: BuildAgentLaunchCommandInput): AgentLaunchCommand {
   const effectiveModel = normalizeOptionalValue(input.model)
   const resumeSessionId = normalizeOptionalValue(input.resumeSessionId)
-  const agentFullAccess = input.agentFullAccess ?? true
+  const agentFullAccess = input.agentFullAccess ?? false
 
   if (input.provider === 'claude-code') {
     if (!resumeSessionId) {

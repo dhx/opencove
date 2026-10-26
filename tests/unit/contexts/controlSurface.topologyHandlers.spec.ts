@@ -136,58 +136,6 @@ describe('control surface topology handlers', () => {
     invokeControlSurfaceMock.mockReset()
   })
 
-  it('reads endpoint directories when approveRoot is unsupported on the remote', async () => {
-    invokeControlSurfaceMock
-      .mockResolvedValueOnce({
-        httpStatus: 200,
-        result: {
-          __opencoveControlEnvelope: true,
-          ok: false,
-          error: {
-            code: 'common.invalid_input',
-            debugMessage: 'Error: Unknown control surface command: workspace.approveRoot',
-          },
-        },
-      })
-      .mockResolvedValueOnce({
-        httpStatus: 200,
-        result: {
-          __opencoveControlEnvelope: true,
-          ok: true,
-          value: {
-            entries: [
-              { name: 'src', uri: 'file:///remote/src', kind: 'directory' },
-              { name: 'README.md', uri: 'file:///remote/README.md', kind: 'file' },
-            ],
-          },
-        },
-      })
-
-    const { controlSurface } = createSubject()
-
-    const result = await controlSurface.invoke(ctx, {
-      kind: 'query',
-      id: 'endpoint.readDirectory',
-      payload: { endpointId: 'remote', path: '/remote' },
-    })
-
-    expect(result.ok).toBe(true)
-    if (result.ok) {
-      expect(result.value.entries).toHaveLength(2)
-      expect(result.value.entries[0]?.name).toBe('src')
-    }
-
-    expect(invokeControlSurfaceMock).toHaveBeenCalledTimes(2)
-    expect(invokeControlSurfaceMock.mock.calls[0]?.[1]).toMatchObject({
-      kind: 'command',
-      id: 'workspace.approveRoot',
-    })
-    expect(invokeControlSurfaceMock.mock.calls[1]?.[1]).toMatchObject({
-      kind: 'query',
-      id: 'filesystem.readDirectory',
-    })
-  })
-
   it('pings endpoints when system.ping is missing (fallback)', async () => {
     invokeControlSurfaceMock
       .mockResolvedValueOnce({

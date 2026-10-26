@@ -1,6 +1,5 @@
 import { app, shell, BrowserWindow, nativeImage, Menu } from 'electron'
 import { join } from 'path'
-import { homedir } from 'node:os'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { hydrateCliEnvironmentForAppLaunch } from '../../platform/os/CliEnvironment'
 import { registerIpcHandlers } from './ipc/registerIpcHandlers'
@@ -31,10 +30,6 @@ import {
   shouldOpenUrlExternally,
 } from './navigationGuards'
 import { requestRendererPersistFlush } from './rendererPersistFlush'
-import {
-  cleanupLegacyManagedHooksAtStartup,
-  reportLegacyManagedHookCleanupFailures,
-} from '../../contexts/agent/infrastructure/cleanupLegacyManagedHooksAtStartup'
 
 let ipcDisposable: ReturnType<typeof registerIpcHandlers> | null = null
 
@@ -264,7 +259,6 @@ function resolveAppUserModelId(): string {
 // Electron ready: create browser windows & IPC.
 app.whenReady().then(async () => {
   await hydrateCliEnvironmentForAppLaunch(app.isPackaged === true)
-  reportLegacyManagedHookCleanupFailures(await cleanupLegacyManagedHooksAtStartup(homedir()))
 
   // Set app user model id for windows
   electronApp.setAppUserModelId(resolveAppUserModelId())

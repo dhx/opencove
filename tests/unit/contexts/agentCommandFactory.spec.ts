@@ -6,6 +6,7 @@ const claudeSessionId = '11111111-1111-4111-8111-111111111111'
 describe('buildAgentLaunchCommand', () => {
   it('builds codex command with model override', () => {
     const command = buildAgentLaunchCommand({
+      agentFullAccess: true,
       provider: 'codex',
       mode: 'new',
       prompt: 'implement login flow',
@@ -26,6 +27,7 @@ describe('buildAgentLaunchCommand', () => {
 
   it('adds option terminator when codex prompt starts with hyphen', () => {
     const command = buildAgentLaunchCommand({
+      agentFullAccess: true,
       provider: 'codex',
       mode: 'new',
       prompt: '- implement login flow',
@@ -42,6 +44,36 @@ describe('buildAgentLaunchCommand', () => {
       '- implement login flow',
     ])
     expect(command.launchMode).toBe('new')
+  })
+
+  it('never adds bypass flags when agentFullAccess is not given', () => {
+    const codex = buildAgentLaunchCommand({
+      provider: 'codex',
+      mode: 'new',
+      prompt: 'x',
+      model: null,
+      resumeSessionId: null,
+    })
+    expect(codex.args).not.toContain('--dangerously-bypass-approvals-and-sandbox')
+    expect(codex.args).toContain('workspace-write')
+
+    const claude = buildAgentLaunchCommand({
+      provider: 'claude-code',
+      mode: 'new',
+      prompt: '',
+      model: null,
+      resumeSessionId: 'abc',
+    })
+    expect(claude.args).not.toContain('--dangerously-skip-permissions')
+
+    const gemini = buildAgentLaunchCommand({
+      provider: 'gemini',
+      mode: 'new',
+      prompt: '',
+      model: null,
+      resumeSessionId: null,
+    })
+    expect(gemini.args).not.toContain('--yolo')
   })
 
   it('builds codex command in safe mode when full access is disabled', () => {
@@ -94,6 +126,7 @@ describe('buildAgentLaunchCommand', () => {
 
   it('builds claude command without model override', () => {
     const command = buildAgentLaunchCommand({
+      agentFullAccess: true,
       provider: 'claude-code',
       mode: 'new',
       prompt: 'review failing tests',
@@ -130,6 +163,7 @@ describe('buildAgentLaunchCommand', () => {
 
   it('builds codex resume command with session id', () => {
     const command = buildAgentLaunchCommand({
+      agentFullAccess: true,
       provider: 'codex',
       mode: 'resume',
       prompt: '',
@@ -174,6 +208,7 @@ describe('buildAgentLaunchCommand', () => {
 
   it('resumes only the explicit claude session', () => {
     const command = buildAgentLaunchCommand({
+      agentFullAccess: true,
       provider: 'claude-code',
       mode: 'resume',
       model: null,
@@ -189,6 +224,7 @@ describe('buildAgentLaunchCommand', () => {
 
   it('supports starting codex without a prompt', () => {
     const command = buildAgentLaunchCommand({
+      agentFullAccess: true,
       provider: 'codex',
       mode: 'new',
       prompt: '   ',
@@ -203,6 +239,7 @@ describe('buildAgentLaunchCommand', () => {
 
   it('supports starting claude without a prompt', () => {
     const command = buildAgentLaunchCommand({
+      agentFullAccess: true,
       provider: 'claude-code',
       mode: 'new',
       prompt: '   ',

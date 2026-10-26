@@ -3,6 +3,7 @@ import { createManagedAgentLaunchPlan } from '../../../../contexts/agent/applica
 import type { AgentLaunchCommand } from '../../../../contexts/agent/infrastructure/cli/AgentCommandFactory'
 import type { AgentLaunchMode, AgentProviderId } from '../../../../shared/contracts/dto'
 import { resolveWorkerAgentTestStub } from './sessionAgentTestStub'
+import { resolveAgentFullAccessPolicy } from '../../../../contexts/agent/application/agentLaunchPolicy'
 
 export async function prepareAgentLaunch(options: {
   profileId?: string | null
@@ -25,7 +26,9 @@ export async function prepareAgentLaunch(options: {
       prompt: options.mode === 'new' ? options.prompt : '',
       model: options.model,
       resumeSessionId: options.resumeSessionId,
-      agentFullAccess: options.agentFullAccess,
+      // Last line of defence: `deny` holds even if a caller resolved full access itself.
+      agentFullAccess:
+        options.agentFullAccess && resolveAgentFullAccessPolicy(process.env) !== 'deny',
       opencodeServer: options.opencodeServer,
       executablePathOverride: options.executablePathOverride,
       workspaceDirectory: options.cwd,

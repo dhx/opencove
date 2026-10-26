@@ -1,5 +1,54 @@
 import { posix } from 'node:path'
 
+/**
+ * The only shell variables a terminal shim sends to the local gateway. The gateway uses them to
+ * find the provider's config (CODEX_HOME, HOME, XDG dirs) and to run `codex app-server` for the
+ * hook trust check (PATH, locale, temp dir, Windows profile dirs). Everything else in the shell
+ * (API keys, tokens, ...) stays in the shell.
+ */
+export const TERMINAL_AGENT_FORWARDED_ENVIRONMENT_KEYS = [
+  'PATH',
+  'HOME',
+  'USER',
+  'LOGNAME',
+  'SHELL',
+  'LANG',
+  'LC_ALL',
+  'LC_CTYPE',
+  'TMPDIR',
+  'TMP',
+  'TEMP',
+  'XDG_CONFIG_HOME',
+  'XDG_DATA_HOME',
+  'XDG_STATE_HOME',
+  'XDG_CACHE_HOME',
+  'XDG_RUNTIME_DIR',
+  'CODEX_HOME',
+  'CLAUDE_CONFIG_DIR',
+  'PATHEXT',
+  'SYSTEMROOT',
+  'COMSPEC',
+  'USERPROFILE',
+  'HOMEDRIVE',
+  'HOMEPATH',
+  'APPDATA',
+  'LOCALAPPDATA',
+] as const
+
+export function pickTerminalAgentForwardedEnvironment(
+  environment: Readonly<Record<string, unknown>>,
+): Record<string, string> {
+  const allowed = new Set<string>(TERMINAL_AGENT_FORWARDED_ENVIRONMENT_KEYS)
+  const picked: Record<string, string> = {}
+  for (const [key, value] of Object.entries(environment)) {
+    // Windows variable names are case-insensitive (Path, SystemRoot, ...).
+    if (typeof value === 'string' && allowed.has(key.toUpperCase())) {
+      picked[key] = value
+    }
+  }
+  return picked
+}
+
 export const terminalAgentLauncherScript = String.raw`
 import { accessSync, constants, realpathSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import { spawn } from 'node:child_process';
@@ -99,7 +148,7 @@ async function prepare(provider, executablePath, invocationId, userArgs) {
       headers: { 'content-type': 'application/json', 'x-opencove-terminal-agent-token': token },
       body: JSON.stringify({
         operation: 'prepare', provider, invocationId, cwd: process.cwd(), executablePath,
-        arguments: userArgs, environment: process.env
+        arguments: userArgs, environment: forwardedEnvironment(process.env)
       }),
       signal: AbortSignal.timeout(10000)
     });
@@ -164,6 +213,14 @@ function normalizeProvider(value) {
   throw new Error('Unsupported terminal Agent provider.');
 }
 function providerCommand(provider) { return provider === 'claude-code' ? 'claude' : provider; }
+function forwardedEnvironment(environment) {
+  const allowed = new Set(${JSON.stringify(TERMINAL_AGENT_FORWARDED_ENVIRONMENT_KEYS)});
+  const picked = {};
+  for (const [key, value] of Object.entries(environment)) {
+    if (typeof value === 'string' && allowed.has(key.toUpperCase())) picked[key] = value;
+  }
+  return picked;
+}
 function validEnv(value) {
   return !!value && typeof value === 'object' && !Array.isArray(value) &&
     Object.values(value).every((entry) => typeof entry === 'string');

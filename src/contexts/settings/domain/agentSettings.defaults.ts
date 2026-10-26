@@ -24,7 +24,7 @@ export const DEFAULT_AGENT_SETTINGS: AgentSettings = {
   workspaceSearchPanelWidth: 420,
   defaultProvider: 'codex',
   agentProviderOrder: resolveDefaultFirstAgentProviderOrder(undefined, 'codex'),
-  agentFullAccess: true,
+  agentFullAccess: false,
   defaultTerminalProfileId: null,
   agentExecutablePathOverrideByProvider: DEFAULT_AGENT_EXECUTABLE_PATH_OVERRIDE_BY_PROVIDER,
   customModelEnabledByProvider: {

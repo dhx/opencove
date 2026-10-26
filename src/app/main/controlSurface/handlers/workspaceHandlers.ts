@@ -1,8 +1,25 @@
 import { mkdir } from 'node:fs/promises'
+import { homedir } from 'node:os'
 import { isAbsolute, resolve, win32 } from 'node:path'
 import type { ControlSurface } from '../controlSurface'
 import type { ApprovedWorkspaceStore } from '../../../../contexts/workspace/infrastructure/approval/ApprovedWorkspaceStoreCore'
 import { createAppError } from '../../../../shared/errors/appError'
+import { findWorkspaceRootRefusal } from '../../../../contexts/workspace/infrastructure/approval/workspaceRootGuard'
+
+export async function assertApprovableWorkspaceRoot(
+  rootPath: string,
+  options: { operationId: string; userDataPath: string; homeDirectory?: string },
+): Promise<void> {
+  const refusal = await findWorkspaceRootRefusal(rootPath, {
+    homeDirectory: options.homeDirectory ?? homedir(),
+    userDataPath: options.userDataPath,
+  })
+  if (refusal) {
+    throw createAppError('common.invalid_input', {
+      debugMessage: `${options.operationId} refused ${rootPath}: ${refusal}.`,
+    })
+  }
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object'
@@ -72,6 +89,10 @@ export function registerWorkspaceHandlers(
     kind: 'command',
     validate: payload => normalizePathPayload(payload, 'workspace.approveRoot'),
     handle: async (_ctx, payload): Promise<void> => {
+      await assertApprovableWorkspaceRoot(payload.path, {
+        operationId: 'workspace.approveRoot',
+        userDataPath: deps.userDataPath,
+      })
       await deps.approvedWorkspaces.registerRoot(payload.path)
     },
     defaultErrorCode: 'common.unexpected',

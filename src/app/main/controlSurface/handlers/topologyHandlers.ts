@@ -1,3 +1,4 @@
+import { assertApprovableWorkspaceRoot } from './workspaceHandlers'
 import { hostname } from 'node:os'
 import type { ControlSurface } from '../controlSurface'
 import { createAppError, OpenCoveAppError } from '../../../../shared/errors/appError'
@@ -43,6 +44,8 @@ export function registerTopologyHandlers(
     approvedWorkspaces: ApprovedWorkspaceStore
     endpointHealth: EndpointHealthService
     readSshConfigHosts: () => Promise<SshConfigHost[]>
+    /** Enables the workspace-root guard for local mounts (see workspace.approveRoot). */
+    userDataPath?: string
   },
 ): void {
   controlSurface.register('endpoint.list', {
@@ -297,6 +300,34 @@ export function registerTopologyHandlers(
       }
 
       try {
+        // Browse without approving the folder on the remote worker (it refuses to approve the
+        // home directory and secret folders). Older remote workers lack the query; for them we
+        // keep the previous approve-then-read behaviour.
+        const browseRequest = {
+          kind: 'query' as const,
+          id: 'filesystem.browseDirectory',
+          payload: { uri: toFileUri(payload.path) },
+        }
+        const browse = await invokeControlSurface(endpoint, browseRequest)
+        if (!browse.result) {
+          throw createAppError('worker.unavailable', {
+            debugMessage: `Remote control surface unavailable: ${payload.endpointId}`,
+          })
+        }
+        if (browse.result.ok === true) {
+          const browsed = browse.result.value as { entries?: unknown }
+          return {
+            endpointId: payload.endpointId,
+            path: payload.path,
+            entries: Array.isArray(browsed.entries)
+              ? (browsed.entries as ReadEndpointDirectoryResult['entries'])
+              : [],
+          }
+        }
+        if (!isUnknownControlSurfaceOperationError(browse.result.error, browseRequest.id)) {
+          throw createAppError(browse.result.error)
+        }
+
         const approveRequest = {
           kind: 'command' as const,
           id: 'workspace.approveRoot',
@@ -368,6 +399,12 @@ export function registerTopologyHandlers(
     validate: normalizeCreateMountPayload,
     handle: async (_ctx, payload) => {
       if (payload.endpointId === 'local') {
+        if (deps.userDataPath !== undefined) {
+          await assertApprovableWorkspaceRoot(payload.rootPath, {
+            operationId: 'mount.create',
+            userDataPath: deps.userDataPath,
+          })
+        }
         await deps.approvedWorkspaces.registerRoot(payload.rootPath)
       } else {
         void deps.topology

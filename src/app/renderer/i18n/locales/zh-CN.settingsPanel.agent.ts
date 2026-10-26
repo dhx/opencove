@@ -20,5 +20,6 @@ export const zhCNSettingsPanelAgent = {
   moveUp: '上移',
   moveDown: '下移',
   fullAccessLabel: '完全访问模式',
-  fullAccessHelp: '为 Agent 关闭沙箱和人工审批。',
+  fullAccessHelp:
+    '为 Agent 关闭沙箱和人工审批。默认关闭。服务器可通过 OPENCOVE_AGENT_FULL_ACCESS=deny 禁止此功能。',
 } as const

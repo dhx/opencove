@@ -33,9 +33,11 @@ export class KimiAgentProviderContribution extends TerminalCliAgentProviderContr
     const resumeSessionId = normalizeOptionalValue(command.resumeSessionId)
     const prompt = command.prompt?.trim() ?? ''
 
+    // `kimi --prompt` always auto-approves every action, so it is only started when full access
+    // is in effect (setting on and allowed by OPENCOVE_AGENT_FULL_ACCESS). Never enable it silently.
     if (command.mode === 'new' && prompt.length > 0 && !command.agentFullAccess) {
       throw new Error(
-        'Kimi prompt mode requires full access because the CLI forces auto permission.',
+        'Kimi cannot start with a prompt without full access: the Kimi CLI auto-approves every action in prompt mode. Turn on full access in the Agent settings (and make sure OPENCOVE_AGENT_FULL_ACCESS is not "deny"), or start Kimi without a prompt.',
       )
     }
 

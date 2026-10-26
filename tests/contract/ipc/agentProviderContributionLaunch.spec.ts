@@ -55,8 +55,9 @@ describe('local IPC agent provider contribution launch', () => {
     const approvedWorkspaces = {
       isPathApproved: vi.fn(async () => true),
     } as unknown as ApprovedWorkspaceStore
+    // Kimi's prompt mode only starts with full access, so the user has turned it on here.
     const persistenceStore = {
-      readAppState: vi.fn(async () => null),
+      readAppState: vi.fn(async () => ({ settings: { agentFullAccess: true } })),
     } as unknown as PersistenceStore
     const { registerAgentIpcHandlers } =
       await import('../../../src/contexts/agent/presentation/main-ipc/register')

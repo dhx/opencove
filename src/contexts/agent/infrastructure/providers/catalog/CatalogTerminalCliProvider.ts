@@ -9,6 +9,7 @@ import {
   type BuiltinAgentCommandProviderId,
 } from '../../cli/AgentCommandFactory'
 import { TerminalCliAgentProviderContribution } from '../terminal-cli/TerminalCliContribution'
+import { createOpenCodeEmbeddedTuiConfig } from '../../opencode/OpenCodeTuiConfig'
 
 export class CatalogTerminalCliProvider extends TerminalCliAgentProviderContribution {
   readonly descriptor: AgentProviderDescriptor & { readonly id: BuiltinAgentCommandProviderId }
@@ -33,6 +34,13 @@ export class CatalogTerminalCliProvider extends TerminalCliAgentProviderContribu
       agentFullAccess: command.agentFullAccess,
       opencodeServer: command.opencodeServer,
     })
+    if (this.descriptor.id === 'opencode' && !process.env.OPENCODE_TUI_CONFIG?.trim()) {
+      const tuiConfig = command.artifacts.track(
+        'opencode-tui-config',
+        await createOpenCodeEmbeddedTuiConfig(),
+      )
+      return { ...plan, env: { OPENCODE_TUI_CONFIG: tuiConfig.path } }
+    }
     return { ...plan, env: {} }
   }
 }

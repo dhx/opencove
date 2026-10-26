@@ -365,4 +365,18 @@ export function registerFilesystemHandlers(
     },
     defaultErrorCode: 'common.unexpected',
   })
+
+  // Lists the folders in any absolute directory WITHOUT approving it. The remote directory picker
+  // (endpoint.readDirectory on the home worker) uses it to browse a remote worker, which used to
+  // approve every folder it showed (home, `/`, ...) just to list it. It returns only non-file
+  // entries and does not read or write anything.
+  controlSurface.register('filesystem.browseDirectory', {
+    kind: 'query',
+    validate: normalizeReadDirectoryPayload,
+    handle: async (_ctx, payload): Promise<ReadDirectoryResult> => {
+      const result = await readDirectoryUseCase(port, payload)
+      return { ...result, entries: result.entries.filter(entry => entry.kind !== 'file') }
+    },
+    defaultErrorCode: 'common.unexpected',
+  })
 }

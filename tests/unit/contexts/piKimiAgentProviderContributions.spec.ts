@@ -92,7 +92,7 @@ describe('KimiAgentProviderContribution', () => {
 
     await expect(
       provider.launcher.createLaunchPlan(launchCommand({ agentFullAccess: false })),
-    ).rejects.toThrow('Kimi prompt mode requires full access')
+    ).rejects.toThrow('Kimi cannot start with a prompt without full access')
   })
 
   it('uses interactive auto mode for resume and preserves explicit session ids', async () => {

@@ -387,7 +387,8 @@ describe('control surface session launch agent', () => {
 
   it.each([
     ['pi', ['--session', 'provider-session']],
-    ['kimi', ['--auto', '--session', 'provider-session']],
+    // Full access is off by default, so Kimi resumes without --auto.
+    ['kimi', ['--session', 'provider-session']],
   ] as const)('resumes %s through its registered contribution', async (provider, expectedArgs) => {
     process.env.OPENCOVE_TEST_USE_REAL_AGENTS = '1'
     const spawnSession = vi.fn(async () => ({ sessionId: `pty-${provider}` }))

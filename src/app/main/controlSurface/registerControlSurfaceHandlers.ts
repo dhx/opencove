@@ -83,6 +83,7 @@ export function registerControlSurfaceHandlers(
     approvedWorkspaces: deps.approvedWorkspaces,
     endpointHealth: deps.endpointHealth,
     readSshConfigHosts,
+    userDataPath: deps.userDataPath,
   })
   registerProjectHandlers(controlSurface, deps.getPersistenceStore)
   registerSpaceHandlers(controlSurface, deps.getPersistenceStore)
