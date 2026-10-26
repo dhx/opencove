@@ -6,12 +6,13 @@ for [opencove-image](https://github.com/dhx/opencove-image). They are upstream's
 
 ## Cutting a release
 
-**Automatically:** when upstream's `CI` workflow finishes green for a push to `main`, `dhx-auto-release.yml`
-releases that commit as the next version: the next patch of `package.json`'s version with `-dhx-<nnn>`
-counted up (`0.4.1-dhx-001`, `0.4.1-dhx-002`, …; when upstream moves to 0.4.1, `0.4.2-dhx-001`). It skips a
-commit that `main` has already moved past (that commit's own CI run releases it) and one that already has a
-release. The release itself is `dhx-release.yml`, called with the version and the commit; it runs all the
-checks below again and publishes only if they pass.
+**Automatically:** every push to `main` starts `dhx-release.yml` right away, in parallel with upstream's
+`CI` workflow. It works out the next version (the next patch of `package.json`'s version with `-dhx-<nnn>`
+counted up: `0.4.1-dhx-001`, `0.4.1-dhx-002`, …; when upstream moves to 0.4.1, `0.4.2-dhx-001`), then builds,
+runs our checks and attests the bundle. It skips lint, types and unit tests, because CI runs those for the
+same commit. When CI finishes green, `dhx-auto-release.yml` publishes that very build. A release is ready about
+a minute after CI. Commits that `main` has already moved past (their CI is cancelled anyway) and commits that
+already have a release are skipped.
 
 **By hand:**
 

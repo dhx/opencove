@@ -1,7 +1,6 @@
-# Releases main automatically (docs/dhx/RELEASES.md): when upstream's CI workflow finishes green for a
-# push to main, the commit gets the next version (<next patch of package.json>-dhx-<nnn>) and
-# dhx-release.yml builds, checks and publishes it. A commit that main has moved past, or that already has
-# a release, is skipped.
+# Releases main automatically (docs/dhx/RELEASES.md). dhx-release.yml builds, checks and attests every push
+# to main while upstream's CI runs; when CI finishes green for that push, this publishes that very build.
+# A commit main has moved past, or one that already has a release, is skipped.
 name: dhx auto release
 
 on:
@@ -18,22 +17,22 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  version:
+  publish:
     if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'
     runs-on: ubuntu-24.04
-    outputs:
-      version: ${{ steps.next.outputs.version }}
-      commit: ${{ steps.next.outputs.commit }}
+    timeout-minutes: 60
+    permissions:
+      contents: write
+      actions: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          ref: ${{ github.event.workflow_run.head_sha }}
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Next version
-        id: next
+      - name: Publish the build of this commit
         env:
+          GH_TOKEN: ${{ github.token }}
           COMMIT: ${{ github.event.workflow_run.head_sha }}
         run: |
           git fetch --quiet --tags origin main
@@ -43,22 +42,24 @@ jobs:
           if git tag --points-at "$COMMIT" | grep -q '^dhx/v'; then
             echo "$COMMIT is released already: $(git tag --points-at "$COMMIT" | grep '^dhx/v')"; exit 0
           fi
-          base="$(node -p 'const [a, b, c] = require("./package.json").version.split("-")[0].split(".").map(Number); `${a}.${b}.${c + 1}`')"
-          last="$(git tag --list "dhx/v${base}-dhx-*" | sed "s#^dhx/v${base}-dhx-##" | sort -n | tail -n1)"
-          version="$(printf '%s-dhx-%03d' "$base" "$((10#${last:-0} + 1))")"
-          echo "releasing $COMMIT as $version"
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-          echo "commit=$COMMIT" >> "$GITHUB_OUTPUT"
-
-  release:
-    needs: version
-    if: needs.version.outputs.version != ''
-    permissions:
-      contents: write
-      id-token: write
-      attestations: write
-    uses: ./.github/workflows/dhx-release.yml
-    with:
-      version: ${{ needs.version.outputs.version }}
-      ref: ${{ needs.version.outputs.commit }}
-      publish: true
+          # The release build started with the push; it is usually done long before CI.
+          for _ in $(seq 1 90); do
+            run="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow dhx-release.yml --commit "$COMMIT" --event push \
+              --json databaseId,status,conclusion -q '.[0] | "\(.databaseId) \(.status) \(.conclusion)"')"
+            set -- $run
+            [ "${2:-}" = completed ] && break
+            sleep 20
+          done
+          if [ "${3:-}" != success ]; then
+            echo "the release build of $COMMIT did not succeed (${run:-none found})" >&2; exit 1
+          fi
+          gh run download "$1" --repo "$GITHUB_REPOSITORY" --name opencove-server --dir build
+          version="$(cat build/VERSION)"
+          if git rev-parse -q --verify "refs/tags/dhx/v${version}" >/dev/null; then
+            echo "dhx/v${version} exists on another commit (pushed while it was released); re-run dhx release for main" >&2
+            exit 1
+          fi
+          (cd build/release && sha256sum -c SHA256SUMS.txt)
+          gh release create "dhx/v${version}" build/release/* --repo "$GITHUB_REPOSITORY" --target "$COMMIT" \
+            --title "OpenCove $version" \
+            --notes "Server build of this fork at ${COMMIT}, built while CI ran and released when CI was green. Verify: sha256sum -c SHA256SUMS.txt, and gh attestation verify opencove-server-linux-x64.tar.gz --repo ${GITHUB_REPOSITORY}."

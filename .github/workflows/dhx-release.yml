@@ -4,33 +4,24 @@
 # build provenance.
 #
 # Tags are dhx/v<version> (e.g. dhx/v0.4.1-dhx-001), so upstream's release.yml (v*) never runs for them.
-# A release comes from a pushed tag, or from dhx-auto-release.yml once CI is green on main (it calls this
-# workflow with a version and a commit; the GitHub release creates the tag). A pull request or a manual run
-# builds and checks without publishing.
+#
+# - Push to main: builds and checks the next version (<next patch of package.json>-dhx-<nnn>) right away,
+#   while upstream's CI runs, and attests it; dhx-auto-release.yml publishes this very build once CI is
+#   green. The gates CI runs for the same commit (lint, types, unit tests) are not repeated here.
+# - Pushed tag dhx/v<version>: builds, runs every gate and check, attests and publishes in one go.
+# - Pull request or manual run: builds and checks without publishing.
 name: dhx release
 
 on:
   push:
     tags: ['dhx/v*']
+    branches: [main]
   pull_request:
   workflow_dispatch:
     inputs:
       version:
         description: 'Version to stamp, e.g. 0.4.1-dhx-001 (a manual run only builds and checks)'
         required: true
-  workflow_call:
-    inputs:
-      version:
-        description: 'Version to stamp and release, e.g. 0.4.1-dhx-001'
-        type: string
-        required: true
-      ref:
-        description: 'The commit to build and tag'
-        type: string
-        required: true
-      publish:
-        type: boolean
-        default: false
 
 permissions:
   contents: read
@@ -46,12 +37,16 @@ jobs:
   build:
     runs-on: ubuntu-24.04
     timeout-minutes: 75
+    permissions:
+      contents: read
+      id-token: write # build provenance, on pushes
+      attestations: write
     outputs:
       version: ${{ steps.version.outputs.version }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          ref: ${{ inputs.ref || github.sha }}
+          fetch-depth: 0 # the tags, for the next version
           persist-credentials: false
 
       - name: Version
@@ -60,9 +55,13 @@ jobs:
           REF_NAME: ${{ github.ref_name }}
           INPUT_VERSION: ${{ inputs.version }}
         run: |
-          case "$REF_NAME" in
-            dhx/v*) version="${REF_NAME#dhx/v}" ;;
-            *) version="${INPUT_VERSION:-0.0.0-dhx-000}" ;; # called or manual: given; a pull request: a trial build
+          case "${GITHUB_EVENT_NAME}:${REF_NAME}" in
+            push:dhx/v*) version="${REF_NAME#dhx/v}" ;;
+            push:main)
+              base="$(node -p 'const [a, b, c] = require("./package.json").version.split("-")[0].split(".").map(Number); `${a}.${b}.${c + 1}`')"
+              last="$(git tag --list "dhx/v${base}-dhx-*" | sed "s#^dhx/v${base}-dhx-##" | sort -n | tail -n1)"
+              version="$(printf '%s-dhx-%03d' "$base" "$((10#${last:-0} + 1))")" ;;
+            *) version="${INPUT_VERSION:-0.0.0-dhx-000}" ;; # manual: given; a pull request: a trial build
           esac
           if ! printf '%s' "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+-dhx-[0-9]{3}$'; then
             echo "version must look like 0.4.1-dhx-001, not $version" >&2; exit 1
@@ -93,7 +92,8 @@ jobs:
           latest="$(ls build/release-notes/stable/ | sort -V | tail -n1)"
           jq --arg v "$VERSION" '.version = $v' "build/release-notes/stable/$latest" > "build/release-notes/stable/v$VERSION.json"
 
-      - name: Gates (upstream's cheap checks)
+      - name: Gates (upstream's cheap checks; on main, CI runs them for this commit)
+        if: github.event_name != 'push' || startsWith(github.ref, 'refs/tags/')
         run: |
           pnpm secrets:scan
           pnpm lint
@@ -112,6 +112,7 @@ jobs:
           mkdir -p release
           cp dist/opencove-server-linux-x64.tar.gz release/
           (cd release && sha256sum opencove-server-linux-x64.tar.gz > SHA256SUMS.txt && cat SHA256SUMS.txt)
+          printf '%s\n' "${{ steps.version.outputs.version }}" > VERSION
 
       - name: Our checks (what the bundle contains, what it reaches)
         run: |
@@ -133,37 +134,35 @@ jobs:
           output-file: release/opencove-server-linux-x64.spdx.json
           upload-artifact: false
 
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        if: github.event_name == 'push'
+        with:
+          subject-path: release/opencove-server-linux-x64.tar.gz
+
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
-          name: opencove-server-${{ steps.version.outputs.version }}
-          path: release/
+          name: opencove-server
+          path: |
+            release/
+            VERSION
           if-no-files-found: error
 
   publish:
-    if: startsWith(github.ref, 'refs/tags/dhx/v') || inputs.publish
+    if: startsWith(github.ref, 'refs/tags/dhx/v')
     needs: build
     runs-on: ubuntu-24.04
     permissions:
       contents: write
-      id-token: write
-      attestations: write
     steps:
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
-          name: opencove-server-${{ needs.build.outputs.version }}
-          path: release
-
-      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
-        with:
-          subject-path: release/opencove-server-linux-x64.tar.gz
+          name: opencove-server
 
       - name: Release
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ needs.build.outputs.version }}
-          COMMIT: ${{ inputs.ref || github.sha }}
         run: |
-          # A pushed tag exists already; for a called release, creating the release creates the tag.
-          gh release create "dhx/v${VERSION}" release/* --repo "$GITHUB_REPOSITORY" --target "$COMMIT" \
+          gh release create "dhx/v${VERSION}" release/* --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
             --title "OpenCove $VERSION" \
-            --notes "Server build of this fork at ${COMMIT}. Verify: sha256sum -c SHA256SUMS.txt, and gh attestation verify opencove-server-linux-x64.tar.gz --repo ${GITHUB_REPOSITORY}."
+            --notes "Server build of this fork at ${GITHUB_SHA}. Verify: sha256sum -c SHA256SUMS.txt, and gh attestation verify opencove-server-linux-x64.tar.gz --repo ${GITHUB_REPOSITORY}."
