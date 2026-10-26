@@ -36,9 +36,17 @@ describe('plugin documentation', () => {
     expect(screen.queryByRole('link', { name: 'Private' })).toBeNull()
   })
 
-  it('supports HTTPS images but does not execute document HTML or navigate unsafe links', () => {
+  it('does not load remote images unless the caller allows them', () => {
+    render(<PluginReadme markdown={'![Diagram](https://example.com/diagram.png)'} />)
+    expect(screen.queryByRole('img')).toBeNull()
+    expect(screen.getByText('Diagram')).toBeVisible()
+    expect(resolvePluginMarkdownUrl('https://example.com/diagram.png', 'src', {})).toBe('')
+  })
+
+  it('supports HTTPS images when allowed but does not execute document HTML or navigate unsafe links', () => {
     const { container } = render(
       <PluginReadme
+        allowRemoteImages
         markdown={[
           '![Diagram](https://example.com/diagram.png)',
           '[Unsafe](javascript:alert%281%29)',
@@ -119,6 +127,6 @@ describe('plugin documentation', () => {
     '../private.png',
     'http://example.com/insecure.png',
   ])('does not resolve unapproved image URL %s', value => {
-    expect(resolvePluginMarkdownUrl(value, 'src', {})).toBe('')
+    expect(resolvePluginMarkdownUrl(value, 'src', {}, true)).toBe('')
   })
 })

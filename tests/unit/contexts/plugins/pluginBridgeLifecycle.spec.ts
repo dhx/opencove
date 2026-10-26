@@ -56,7 +56,12 @@ function setup(constructionFails = false) {
   listeners.get('message')?.({
     source: parent,
     origin: 'http://127.0.0.1:8000',
-    data: { channel: 'opencove-plugin-v1', type: 'init', context: { theme: 'dark' } },
+    data: {
+      channel: 'opencove-plugin-v1',
+      type: 'init',
+      session: 'view-session',
+      context: { theme: 'dark' },
+    },
   })
   return { window, sockets, listeners, beacon, pause, schedule, post, parent }
 }
@@ -81,7 +86,10 @@ describe('injected plugin SDK lifecycle', () => {
     listeners.get('pageshow')?.({ persisted: true })
     listeners.get('pageshow')?.({ persisted: true })
     expect(post.mock.calls.filter(([message]) => message.type === 'restore')).toEqual([
-      [{ channel: 'opencove-plugin-v1', type: 'restore' }, 'http://127.0.0.1:8000'],
+      [
+        { channel: 'opencove-plugin-v1', type: 'restore', session: 'view-session' },
+        'http://127.0.0.1:8000',
+      ],
     ])
   })
 
@@ -309,6 +317,8 @@ it('rejects a host SDK call with the structured filesystem reason supplied by it
     expect(post.mock.calls.some(([message]) => message.type === 'request')).toBe(true),
   )
   const request = post.mock.calls.find(([message]) => message.type === 'request')![0]
+  // Every request carries the session the host handed out in init.
+  expect(request.session).toBe('view-session')
   listeners.get('message')?.({
     source: parent,
     origin: 'http://127.0.0.1:8000',

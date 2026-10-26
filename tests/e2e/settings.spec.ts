@@ -116,7 +116,7 @@ test.describe('Settings', () => {
       const updatePolicy = window.locator('[data-testid="settings-update-policy"]')
       const updatePolicyTrigger = window.locator('[data-testid="settings-update-policy-trigger"]')
       await expect(updatePolicyTrigger).toBeVisible()
-      await expect(updatePolicy).toHaveValue('prompt')
+      await expect(updatePolicy).toHaveValue('off')
       await selectCoveOption(window, 'settings-update-policy', 'auto')
       await expect(updatePolicy).toHaveValue('auto')
 

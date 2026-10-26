@@ -12,6 +12,7 @@ export const PLUGIN_BRIDGE_SCRIPT = String.raw`
   let themeFontSignature;
   let context;
   let parentOrigin;
+  let session;
   let resolveReady;
   let resolveRetired;
   const retirement = new Promise(resolve => { resolveRetired = resolve; });
@@ -138,7 +139,7 @@ export const PLUGIN_BRIDGE_SCRIPT = String.raw`
   window.addEventListener('pageshow', event => {
     if (!event.persisted || !retired || restoreRequested) return;
     restoreRequested = true;
-    parent.postMessage({ channel, type: 'restore' },
+    parent.postMessage({ channel, type: 'restore', session },
       parentOrigin && parentOrigin !== 'null' ? parentOrigin : '*');
   });
   connectPresence();
@@ -188,6 +189,7 @@ export const PLUGIN_BRIDGE_SCRIPT = String.raw`
     const message = event.data;
     if (message.type === 'init' && !context) {
       parentOrigin = event.origin;
+      session = message.session;
       applyTheme(message.context);
       resolveReady(context);
       announceCommandReadiness();
@@ -219,7 +221,7 @@ export const PLUGIN_BRIDGE_SCRIPT = String.raw`
         reject(new Error('OpenCove plugin request timed out: ' + operation));
       }, 45000);
       pending.set(id, { resolve, reject, timer });
-      parent.postMessage({ channel, type: 'request', id, operation, payload },
+      parent.postMessage({ channel, type: 'request', session, id, operation, payload },
         parentOrigin === 'null' ? '*' : parentOrigin);
     });
   }

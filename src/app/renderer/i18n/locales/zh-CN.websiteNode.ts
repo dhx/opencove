@@ -29,6 +29,8 @@ export const zhCNWebsiteNode = {
   iframeUnavailableTitle: '此网站无法在网页兼容查看器中显示',
   iframeUnavailableDetail:
     '部分网站会通过自身安全策略禁止嵌入式浏览器。需要完整访问时，请在桌面客户端使用完整浏览器。',
+  appOriginRefusedTitle: 'OpenCove 不会在网站窗口中显示自身',
+  appOriginRefusedDetail: '此地址属于 OpenCove。嵌入它会让该页面访问你的 OpenCove 会话。',
   enterFullscreen: '全屏',
   exitFullscreen: '退出全屏',
   close: '关闭',

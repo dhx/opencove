@@ -1,8 +1,12 @@
 import type { RuntimeBuildIdentity } from '../../../../shared/contracts/runtimeBuild'
 import type { ManagedSshEndpointRuntimeAccess } from './topologyEndpointAccess'
 
+export const MANAGED_SSH_NO_RELEASE_SOURCE_MESSAGE =
+  'This build has no default download for the remote OpenCove runtime. Set OPENCOVE_RELEASE_BASE_URL (a release download URL) or OPENCOVE_MANAGED_SSH_ARTIFACT_DIR (a local runtime bundle) for the OpenCove worker.'
+
 export interface ManagedSshScriptOptions {
-  installerUrl: string
+  /** Null when no release source is configured: the script can only use an existing or copied runtime. */
+  installerUrl: string | null
   reinstallRuntime: boolean
   runtimeBuild?: RuntimeBuildIdentity | null
   operationId?: string
@@ -15,6 +19,10 @@ export function shellQuote(value: string): string {
 }
 export function powershellQuote(value: string): string {
   return `'${value.replace(/'/g, `''`)}'`
+}
+
+function releaseBaseUrl(installerUrl: string): string {
+  return installerUrl.slice(0, installerUrl.lastIndexOf('/'))
 }
 
 function request(
@@ -45,8 +53,7 @@ export PATH="$HOME/.local/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
 state_dir="${'${XDG_STATE_HOME:-$HOME/.local/state}'}/opencove/managed-ssh/${access.endpointId.replace(/[^A-Za-z0-9_-]/g, '_')}"
 export OPENCOVE_INSTALL_ROOT="${'${XDG_DATA_HOME:-$HOME/.local/share}'}/opencove/managed-runtimes"
 export OPENCOVE_BIN_DIR="$state_dir/builds/${build.buildId}/bin"
-export OPENCOVE_RELEASE_BASE_URL=${shellQuote(options.installerUrl.slice(0, options.installerUrl.lastIndexOf('/')))}
-launcher="$OPENCOVE_BIN_DIR/opencove"
+${options.installerUrl ? `export OPENCOVE_RELEASE_BASE_URL=${shellQuote(releaseBaseUrl(options.installerUrl))}\n` : ''}launcher="$OPENCOVE_BIN_DIR/opencove"
 installer_path="$state_dir/opencove-install-${options.operationId ?? 'bootstrap'}.sh"
 mkdir -p "$state_dir"
 printf '%s\\n' '[opencove-bootstrap-progress:v1] checking_remote_runtime'
@@ -66,7 +73,10 @@ if [ ${options.reinstallRuntime ? '1' : '0'} = 1 ] || ! runtime_matches; then
       : build.channel === 'dev'
         ? `printf '%s\\n' '[opencove-bootstrap:installer_unavailable] No artifact for this development build. Build the target platform bundle and set OPENCOVE_MANAGED_SSH_ARTIFACT_DIR; historical source directories are not reused.' >&2
   exit 1`
-        : `if ! curl -fsSL --connect-timeout 15 --max-time 60 ${shellQuote(options.installerUrl)} -o "$installer_path"; then
+        : !options.installerUrl
+          ? `printf '%s\\n' ${shellQuote(`[opencove-bootstrap:installer_unavailable] ${MANAGED_SSH_NO_RELEASE_SOURCE_MESSAGE}`)} >&2
+  exit 1`
+          : `if ! curl -fsSL --connect-timeout 15 --max-time 60 ${shellQuote(options.installerUrl)} -o "$installer_path"; then
     printf '%s\\n' '[opencove-bootstrap:installer_unavailable] Could not download the pinned runtime installer.' >&2
     exit 1
   fi`
@@ -102,8 +112,7 @@ $stateDir = Join-Path $stateBase ${powershellQuote(`OpenCove/managed-ssh/${acces
 $env:OPENCOVE_INSTALL_ROOT = Join-Path $stateBase 'OpenCove\\managed-runtimes'
 $env:OPENCOVE_BIN_DIR = Join-Path $stateDir 'builds\\${build.buildId}\\bin'
 $env:OPENCOVE_MANAGED_INSTALL = '1'
-$env:OPENCOVE_RELEASE_BASE_URL = ${powershellQuote(options.installerUrl.slice(0, options.installerUrl.lastIndexOf('/')))}
-$launcher = Join-Path $env:OPENCOVE_BIN_DIR 'opencove.cmd'
+${options.installerUrl ? `$env:OPENCOVE_RELEASE_BASE_URL = ${powershellQuote(releaseBaseUrl(options.installerUrl))}\n` : ''}$launcher = Join-Path $env:OPENCOVE_BIN_DIR 'opencove.cmd'
 $installerPath = Join-Path $stateDir 'opencove-install-${options.operationId ?? 'bootstrap'}.ps1'
 New-Item -ItemType Directory -Path $stateDir -Force | Out-Null
 function Test-RuntimeBuild {
@@ -124,7 +133,9 @@ if (${options.reinstallRuntime ? '$true' : '$false'} -or !(Test-RuntimeBuild)) {
   $env:OPENCOVE_STANDALONE_CHECKSUMS_FILE = Join-Path $artifactDir 'SHA256SUMS.txt'`
       : build.channel === 'dev'
         ? `throw '[opencove-bootstrap:installer_unavailable] Build the target platform bundle and set OPENCOVE_MANAGED_SSH_ARTIFACT_DIR.'`
-        : `try { Invoke-WebRequest -UseBasicParsing -TimeoutSec 60 -Uri ${powershellQuote(options.installerUrl)} -OutFile $installerPath } catch { throw '[opencove-bootstrap:installer_unavailable] Could not download the pinned runtime installer.' }`
+        : !options.installerUrl
+          ? `throw ${powershellQuote(`[opencove-bootstrap:installer_unavailable] ${MANAGED_SSH_NO_RELEASE_SOURCE_MESSAGE}`)}`
+          : `try { Invoke-WebRequest -UseBasicParsing -TimeoutSec 60 -Uri ${powershellQuote(options.installerUrl)} -OutFile $installerPath } catch { throw '[opencove-bootstrap:installer_unavailable] Could not download the pinned runtime installer.' }`
   }
   [Console]::Out.WriteLine('[opencove-bootstrap-progress:v1] installing_runtime')
   & powershell -NoProfile -ExecutionPolicy Bypass -File $installerPath

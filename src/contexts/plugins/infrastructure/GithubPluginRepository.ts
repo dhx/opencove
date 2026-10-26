@@ -1,6 +1,20 @@
 import { normalizeLocalPluginPackage, pluginRecord } from '../domain/localPluginValidation'
 import type { PluginRepositoryDetails } from '../domain/pluginRepositoryTypes'
 
+export const PLUGIN_CATALOG_OFF_MESSAGE =
+  'The plugin catalog is off in this build, so OpenCove does not search or read GitHub. Install a plugin from a git URL or a local directory instead.'
+
+/** Plugin discovery and repository details contact GitHub; this build does so only when the worker opts in. */
+export function isPluginCatalogEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env.OPENCOVE_PLUGIN_CATALOG === '1'
+}
+
+export function assertPluginCatalogEnabled(): void {
+  if (!isPluginCatalogEnabled()) {
+    throw new Error(PLUGIN_CATALOG_OFF_MESSAGE)
+  }
+}
+
 export function githubRepository(value: string): { repository: string; slug: string } {
   const url = new URL(value)
   const match = /^\/([\w.-]+)\/([\w.-]+?)(?:\.git)?\/?$/.exec(url.pathname)
@@ -24,6 +38,7 @@ export async function githubJson(
   path: string,
   limit = 1024 * 1024,
 ): Promise<Record<string, unknown> | null> {
+  assertPluginCatalogEnabled()
   const response = await fetch(`https://api.github.com/${path}`, {
     headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'OpenCove' },
     signal: AbortSignal.timeout(10_000),
@@ -89,6 +104,7 @@ function content(file: Record<string, unknown>, max: number): string {
 
 /** Pin all inspected files to one commit; never clone, build, or execute discovery content. */
 export async function inspectGithubPluginRepository(url: string): Promise<PluginRepositoryDetails> {
+  assertPluginCatalogEnabled()
   const { repository, slug } = githubRepository(url)
   const metadata = await githubJson(`repos/${slug}`)
   if (!metadata) {

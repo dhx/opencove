@@ -381,12 +381,15 @@ export function buildIssueReportMarkdown(input: BuildIssueReportDocumentInput): 
   return buildIssueReportDocument(input).markdown
 }
 
+// Issue reports go to this fork's tracker, not upstream's.
+export const ISSUE_REPORT_NEW_ISSUE_URL = 'https://github.com/dhx/opencove/issues/new'
+
 export function buildGitHubIssueUrl(input: { title: string; body: string }): string {
   const params = new URLSearchParams()
   params.set('title', input.title)
   params.set('body', input.body)
 
-  let url = `https://github.com/DeadWaveWave/opencove/issues/new?${params.toString()}`
+  let url = `${ISSUE_REPORT_NEW_ISSUE_URL}?${params.toString()}`
   if (url.length <= MAX_GITHUB_URL_CHARS) {
     return url
   }
@@ -399,7 +402,7 @@ export function buildGitHubIssueUrl(input: { title: string; body: string }): str
     const nextParams = new URLSearchParams()
     nextParams.set('title', input.title)
     nextParams.set('body', truncateText(input.body, budget, 'github-url-budget'))
-    url = `https://github.com/DeadWaveWave/opencove/issues/new?${nextParams.toString()}`
+    url = `${ISSUE_REPORT_NEW_ISSUE_URL}?${nextParams.toString()}`
     if (url.length <= MAX_GITHUB_URL_CHARS) {
       return url
     }
@@ -409,7 +412,7 @@ export function buildGitHubIssueUrl(input: { title: string; body: string }): str
   const fallbackParams = new URLSearchParams()
   fallbackParams.set('title', input.title)
   fallbackParams.set('body', truncateText(input.body, GITHUB_BODY_MIN_CHARS, 'github-url-budget'))
-  return `https://github.com/DeadWaveWave/opencove/issues/new?${fallbackParams.toString()}`
+  return `${ISSUE_REPORT_NEW_ISSUE_URL}?${fallbackParams.toString()}`
 }
 
 export function resolveIncludedDiagnostics(

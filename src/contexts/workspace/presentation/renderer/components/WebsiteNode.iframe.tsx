@@ -1,7 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { JSX } from 'react'
 import { useTranslation } from '@app/renderer/i18n'
+import { isWebsiteUrlOnAppOrigin } from '@shared/utils/websiteUrl'
 
+// allow-same-origin stays: without it every embedded site runs in an opaque origin with no cookies or
+// storage, and most real sites (sign-ins, apps that read localStorage at start) break. It only grants a
+// site its own origin; the app's own origin is refused below (isWebsiteUrlOnAppOrigin).
 export const WEBSITE_NODE_IFRAME_SANDBOX =
   'allow-downloads allow-forms allow-modals allow-popups allow-popups-to-escape-sandbox allow-same-origin allow-scripts allow-top-navigation-by-user-activation'
 
@@ -41,10 +45,24 @@ export function WebsiteNodeIframe({
   const { t } = useTranslation()
   const src = useMemo(() => resolveWebsiteIframeSourceUrl(url), [url])
   const [loadFailed, setLoadFailed] = useState(false)
+  const refused = isWebsiteUrlOnAppOrigin(src, window.location.href)
 
   useEffect(() => {
     setLoadFailed(false)
   }, [src])
+
+  if (refused) {
+    return (
+      <div className="website-node__native-placeholder nodrag" role="status">
+        <div className="website-node__native-placeholder-title">
+          {t('websiteNode.appOriginRefusedTitle')}
+        </div>
+        <div className="website-node__native-placeholder-detail">
+          {t('websiteNode.appOriginRefusedDetail')}
+        </div>
+      </div>
+    )
+  }
 
   return (
     <>

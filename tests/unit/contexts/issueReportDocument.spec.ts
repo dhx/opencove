@@ -164,7 +164,7 @@ describe('issue report document', () => {
       body: 'details '.repeat(2_000),
     })
 
-    expect(url).toContain('https://github.com/DeadWaveWave/opencove/issues/new?')
+    expect(url).toContain('https://github.com/dhx/opencove/issues/new?')
     expect(url.length).toBeLessThan(8_000)
   })
 })

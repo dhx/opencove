@@ -39,18 +39,10 @@
       "docs/plugins{,/**/*}",
       "package.json"
     ],
-    "generateUpdatesFilesForAllChannels": true,
     "extraResources": [
       {
         "from": "release/release-manifest.json",
         "to": "release-manifest.json"
-      }
-    ],
-    "publish": [
-      {
-        "provider": "github",
-        "owner": "DeadWaveWave",
-        "repo": "opencove"
       }
     ],
     "win": {

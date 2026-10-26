@@ -191,7 +191,7 @@ describe('independent plugin installation ownership', () => {
     expect(again.revision).not.toBe(next.revision)
   })
 
-  it('isolates disabled previews and disposes their child and temporary storage', async () => {
+  it('isolates previews and disposes their child and temporary storage, and serves none for disabled plugins', async () => {
     const options: Array<Parameters<PluginBackendPort['start']>[1]> = []
     const stop = vi.fn(async () => undefined)
     const { manager } = create({
@@ -203,13 +203,16 @@ describe('independent plugin installation ownership', () => {
     await manager.install(source)
     const actual = await open(manager)
     await manager.storageSet(actual.viewId, 'favorites', ['real'])
-    await manager.setEnabled(manifest.id, false)
     const preview = await open(manager, true)
     expect(options[1].dataDirectory).toContain('/previews/')
     expect(await manager.storageGet(preview.viewId, 'favorites')).toBeNull()
     await manager.storageSet(preview.viewId, 'favorites', ['preview'])
     expect(await manager.invoke(preview.viewId, 'read', null)).toBe(true)
     await manager.closeView(preview.viewId)
+    await manager.setEnabled(manifest.id, false)
+    await expect(open(manager, true)).rejects.toThrow('Plugin is disabled.')
+    await expect(open(manager)).rejects.toThrow('Plugin is disabled.')
+    expect(options).toHaveLength(2)
     await manager.setEnabled(manifest.id, true)
     expect(await manager.storageGet((await open(manager)).viewId, 'favorites')).toEqual(['real'])
     expect(stop).toHaveBeenCalledTimes(2)
