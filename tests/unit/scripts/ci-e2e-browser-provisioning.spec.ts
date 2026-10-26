@@ -4,15 +4,6 @@ import { describe, expect, it } from 'vitest'
 
 const rootDir = resolve(import.meta.dirname, '../../..')
 
-function readJob(workflow: string, jobName: string, nextJobName: string): string {
-  const start = workflow.indexOf(`  ${jobName}:`)
-  const end = workflow.indexOf(`  ${nextJobName}:`, start + 1)
-  if (start < 0 || end < 0) {
-    throw new Error(`Missing CI job boundary for ${jobName}`)
-  }
-  return workflow.slice(start, end)
-}
-
 describe('CI E2E browser provisioning', () => {
   // This fork runs CI on Linux only (docs/dhx/RELEASES.md).
   it('installs Chromium before Desktop/Web continuity tests on Linux', async () => {
