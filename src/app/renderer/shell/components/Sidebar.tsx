@@ -45,7 +45,8 @@ import {
 } from '@contexts/settings/domain/sidebarViewSettings'
 import { projectSidebarView } from '../utils/sidebarView'
 import { SidebarViewControls } from './SidebarViewControls'
-import opencoveMark from '../../assets/brand/opencove-mark.png'
+// This fork's mark (the same one as the tab icon, src/shared/brand/brand.ts).
+import productMark from '../../assets/brand/session-desk-mark.svg'
 
 export type SidebarVariant = 'docked' | 'rail' | 'peek'
 type SidebarProps = {
@@ -299,7 +300,7 @@ export function Sidebar({
         <div className="workspace-project-rail" data-testid="workspace-project-rail">
           <img
             className="workspace-project-rail__logo"
-            src={opencoveMark}
+            src={productMark}
             alt=""
             aria-hidden="true"
           />
