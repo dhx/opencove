@@ -1,4 +1,4 @@
-# CI image for the browser E2E jobs (ci.yml, e2e-electron.yml), published as ghcr.io/dhx/opencove-ci by
+# CI image for the browser E2E jobs (ci.yml, e2e-electron.yml), published as ghcr.io/dhx/session-desk-ci by
 # .github/workflows/ci-image.yml. Microsoft's Playwright image carries the browsers and their libraries;
 # this adds what the official image leaves out and our jobs need, so no test run goes through apt:
 # - python3, make, g++: node-pty has no Linux prebuilds and compiles with node-gyp during `pnpm install`.
