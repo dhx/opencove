@@ -8,6 +8,7 @@ import {
 } from './webSessionManager'
 import { isSecureRequest, resolveClientAddress } from './requestTransport'
 import { applyWebUiHtmlSecurityHeaders } from './webUiSecurityHeaders'
+import { FAVICON_DATA_URI, NOT_OFFICIAL_NOTE, PRODUCT_NAME } from '../../../../shared/brand/brand'
 
 const MAX_LOGIN_BODY_BYTES = 8 * 1024
 const LOGIN_FAILURE_WINDOW_MS = 60_000
@@ -113,7 +114,8 @@ function renderLoginPage(options: { redirectPath: string; errorMessage: string |
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>OpenCove Web UI</title>
+    <title>${PRODUCT_NAME}</title>
+    <link rel="icon" type="image/svg+xml" href="${FAVICON_DATA_URI}" />
     <style>
       :root { color-scheme: dark; }
       body {
@@ -176,7 +178,7 @@ function renderLoginPage(options: { redirectPath: string; errorMessage: string |
   </head>
   <body>
     <div class="card">
-      <h1>OpenCove Web UI</h1>
+      <h1>${PRODUCT_NAME}</h1>
       <p>This Worker requires a password. If you’re on a shared network, consider using an SSH tunnel or VPN.</p>
       <form method="post" action="/auth/login">
         <input type="hidden" name="redirectPath" value="${escapeHtml(options.redirectPath)}" />
@@ -186,6 +188,7 @@ function renderLoginPage(options: { redirectPath: string; errorMessage: string |
       </form>
       ${errorHtml}
       <div class="hint"><a href="/auth/logout">Clear session</a></div>
+      <div class="hint">${NOT_OFFICIAL_NOTE}</div>
     </div>
   </body>
 </html>`
