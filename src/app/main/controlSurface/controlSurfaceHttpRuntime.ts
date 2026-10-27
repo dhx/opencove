@@ -38,6 +38,7 @@ import { ControlSurfaceAcceptedRequestOwner } from './controlSurfaceAcceptedRequ
 import { ManagedRuntimeMaintenance } from '../../../contexts/topology/application/ManagedRuntimeMaintenance'
 import { registerManagedRuntimeHandlers } from './handlers/managedRuntimeHandlers'
 import { PluginViewLifecycle } from './pluginViewLifecycle'
+import { resolveCanvasImageStoreDir } from '../../../contexts/workspace/infrastructure/canvasImages/canvasImageStore'
 
 const PTY_STREAM_DEFAULT_REPLAY_WINDOW_MAX_BYTES = 400_000
 
@@ -240,6 +241,8 @@ export function createControlSurfaceHttpRuntime(
     terminalRecoverySpawnAdmission: terminalRuntimeAvailability,
     agentProviderRegistry,
     terminalAgentActivity: terminalAgents.activity,
+    readHookFinalMessage: sessionId =>
+      agentHookChannels.map(channel => channel.getFinalMessage(sessionId)).find(Boolean) ?? null,
   })
 
   let closed = false
@@ -286,6 +289,7 @@ export function createControlSurfaceHttpRuntime(
     allowQueryToken: options.allowQueryToken === true,
     enableDebugRoutes: options.enableDebugRoutes === true,
     dropsDirectory: resolve(options.userDataPath, 'drops'),
+    canvasImagesDirectory: resolveCanvasImageStoreDir(options.userDataPath),
   })
 
   const runtime: ControlSurfaceHttpRuntime = {

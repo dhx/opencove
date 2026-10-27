@@ -1,4 +1,4 @@
-import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
+import { mkdir } from 'node:fs/promises'
 import { basename, resolve } from 'node:path'
 import { app, clipboard, dialog, ipcMain } from 'electron'
 import { IPC_CHANNELS } from '../../../../shared/contracts/ipc'
@@ -29,15 +29,15 @@ import {
   listAvailableWorkspacePathOpeners,
   openWorkspacePath,
 } from '../../infrastructure/openers/workspacePathOpeners'
+import {
+  deleteCanvasImageFile,
+  readCanvasImageFile,
+  resolveCanvasImageStoreDir,
+  writeCanvasImageFile,
+} from '../../infrastructure/canvasImages/canvasImageStore'
 
-const CANVAS_IMAGE_STORE_DIRECTORY_NAME = 'canvas-images'
-
-function resolveCanvasImageStoreDir(): string {
-  return resolve(app.getPath('userData'), CANVAS_IMAGE_STORE_DIRECTORY_NAME)
-}
-
-function resolveCanvasImageAssetPath(assetId: string): string {
-  return resolve(resolveCanvasImageStoreDir(), assetId)
+function resolveCanvasImageStoreDirForApp(): string {
+  return resolveCanvasImageStoreDir(app.getPath('userData'))
 }
 
 export function registerWorkspaceIpcHandlers(
@@ -142,18 +142,11 @@ export function registerWorkspaceIpcHandlers(
     IPC_CHANNELS.workspaceWriteCanvasImage,
     async (_event, payload: WriteCanvasImageInput): Promise<void> => {
       const normalized = normalizeWriteCanvasImagePayload(payload)
-      const storeDir = resolveCanvasImageStoreDir()
-      await mkdir(storeDir, { recursive: true })
-
-      const targetPath = resolveCanvasImageAssetPath(normalized.assetId)
-      const tempPath = `${targetPath}.tmp-${crypto.randomUUID()}`
-
-      try {
-        await writeFile(tempPath, Buffer.from(normalized.bytes))
-        await rename(tempPath, targetPath)
-      } finally {
-        await rm(tempPath, { force: true }).catch(() => undefined)
-      }
+      await writeCanvasImageFile(
+        resolveCanvasImageStoreDirForApp(),
+        normalized.assetId,
+        normalized.bytes,
+      )
     },
     { defaultErrorCode: 'workspace.canvas_image_write_failed' },
   )
@@ -162,19 +155,11 @@ export function registerWorkspaceIpcHandlers(
     IPC_CHANNELS.workspaceReadCanvasImage,
     async (_event, payload: ReadCanvasImageInput): Promise<ReadCanvasImageResult | null> => {
       const normalized = normalizeReadCanvasImagePayload(payload)
-      const targetPath = resolveCanvasImageAssetPath(normalized.assetId)
-
-      try {
-        const bytes = await readFile(targetPath)
-        return { bytes }
-      } catch (error) {
-        const code = (error as NodeJS.ErrnoException | undefined)?.code
-        if (code === 'ENOENT') {
-          return null
-        }
-
-        throw error
-      }
+      const bytes = await readCanvasImageFile(
+        resolveCanvasImageStoreDirForApp(),
+        normalized.assetId,
+      )
+      return bytes ? { bytes } : null
     },
     { defaultErrorCode: 'workspace.canvas_image_read_failed' },
   )
@@ -183,8 +168,7 @@ export function registerWorkspaceIpcHandlers(
     IPC_CHANNELS.workspaceDeleteCanvasImage,
     async (_event, payload: DeleteCanvasImageInput): Promise<void> => {
       const normalized = normalizeDeleteCanvasImagePayload(payload)
-      const targetPath = resolveCanvasImageAssetPath(normalized.assetId)
-      await rm(targetPath, { force: true })
+      await deleteCanvasImageFile(resolveCanvasImageStoreDirForApp(), normalized.assetId)
     },
     { defaultErrorCode: 'workspace.canvas_image_delete_failed' },
   )
