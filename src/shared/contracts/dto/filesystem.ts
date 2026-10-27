@@ -13,6 +13,14 @@ export interface FileSystemStat {
   mtimeMs: number | null
 }
 
+export interface ResolveDroppedFileOptions {
+  /**
+   * Web UI only: the project folder the drop landed in. The file is uploaded into
+   * `<targetDirectoryPath>/dropped/`. The desktop app ignores it and uses the file's own path.
+   */
+  targetDirectoryPath?: string | null
+}
+
 export interface ReadFileTextInput {
   maxBytes?: number
   uri: string

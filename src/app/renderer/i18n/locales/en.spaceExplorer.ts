@@ -8,6 +8,9 @@ export const enSpaceExplorer = {
   expandFolder: 'Expand {{name}}',
   collapseFolder: 'Collapse {{name}}',
   openFailed: 'Could not open this item on the canvas: {{message}}',
+  browserFolderDropUnsupported:
+    "Folders can't be dropped from a browser — add the folder as a project instead.",
+  browserDropNoProject: 'Open a project before dropping files onto the canvas.',
   nativeDropUnavailable:
     'Use the desktop app to add files from your computer, or drag files from the Explorer.',
   parentDirectory: 'Parent directory',

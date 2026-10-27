@@ -1,4 +1,4 @@
-import { uploadDroppedFileToWorker } from './browserFileDrop'
+import { resolveDroppedFileInBrowser, uploadDroppedFileToWorker } from './browserFileDrop'
 import {
   deleteCanvasImageOnWorker,
   readCanvasImageFromWorker,
@@ -186,6 +186,7 @@ export function installBrowserOpenCoveApi(): void {
       // A browser does not tell the page where a file lives; a dropped file is uploaded instead.
       getPathForFile: () => '',
       uploadDroppedFile: uploadDroppedFileToWorker,
+      resolveDroppedFile: resolveDroppedFileInBrowser,
       createDirectory: async payload => {
         await invokeBrowserControlSurface<void>({
           kind: 'command',

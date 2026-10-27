@@ -2,6 +2,7 @@ import type { PluginInstallationManager } from '../../../contexts/plugins/applic
 import { tryHandlePluginAssetRoute } from './pluginAssetRoutes'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { createAppErrorDescriptor } from '../../../shared/errors/appError'
+import type { ApprovedWorkspaceStore } from '../../../contexts/workspace/infrastructure/approval/ApprovedWorkspaceStore'
 import type { PersistenceStore } from '../../../platform/persistence/sqlite/PersistenceStore'
 import type { ControlSurface } from './controlSurface'
 import type { ControlSurfaceContext } from './types'
@@ -63,6 +64,8 @@ export interface ControlSurfaceHttpRequestHandlerDeps {
   dropsDirectory?: string
   /** Where canvas images are kept (`<userData>/canvas-images`); unset turns the routes off. */
   canvasImagesDirectory?: string
+  /** Decides where a file dropped onto the canvas may go (`x-drop-directory`); unset refuses. */
+  approvedWorkspaces?: ApprovedWorkspaceStore
 }
 
 function listenerAllowsAuth(
@@ -332,6 +335,7 @@ export function createControlSurfaceHttpRequestHandler(
         res,
         dropsDirectory: deps.dropsDirectory,
         now: deps.ctx.now(),
+        approvedWorkspaces: deps.approvedWorkspaces,
       })
       return
     }

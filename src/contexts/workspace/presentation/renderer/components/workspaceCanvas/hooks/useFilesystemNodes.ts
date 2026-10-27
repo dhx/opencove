@@ -301,6 +301,12 @@ export function useFilesystemNodes({
     }),
     [updateFolder, openFile, findBlockingOpenDocument, onShowMessage, getNodePathUri, copyNodePath],
   )
-  const nativeDrop = useNativeFilesystemDrop({ workspaceId, spacesRef, materialize, onShowMessage })
+  const nativeDrop = useNativeFilesystemDrop({
+    workspaceId,
+    workspacePath,
+    spacesRef,
+    materialize,
+    onShowMessage,
+  })
   return { actions, handleDragOver, handleDrop, ...nativeDrop }
 }
