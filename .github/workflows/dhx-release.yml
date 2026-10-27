@@ -119,6 +119,13 @@ jobs:
           mv repack/opencove-server-linux-x64 "repack/${ASSET}"
           tar -czf "release/${ASSET}.tar.gz" -C repack "${ASSET}"
           test "$(tar -tzf "release/${ASSET}.tar.gz" | cut -d/ -f1 | sort -u)" = "${ASSET}"
+          test "$(tar -tzvf dist/opencove-server-linux-x64.tar.gz | sed 's#opencove-server-linux-x64/##' | awk '{$4=$5=""; print}' | sort)" \
+            = "$(tar -tzvf "release/${ASSET}.tar.gz" | sed "s#${ASSET}/##" | awk '{$4=$5=""; print}' | sort)"
+          # The bundle as built, for upstream's smoke test: it installs through opencove-install.sh, which expects
+          # upstream's name. Not published.
+          mkdir -p as-built
+          cp dist/opencove-server-linux-x64.tar.gz as-built/
+          (cd as-built && sha256sum opencove-server-linux-x64.tar.gz > SHA256SUMS.txt)
           (cd release && sha256sum "${ASSET}.tar.gz" > SHA256SUMS.txt && cat SHA256SUMS.txt)
           printf '%s\n' "${{ steps.version.outputs.version }}" > VERSION
 
@@ -132,7 +139,7 @@ jobs:
       - name: Upstream's container smoke test
         run: |
           docker run --rm -v "$PWD:/workspace:ro" -w /workspace "$SMOKE_IMAGE" \
-            sh scripts/smoke-standalone-node-runtime.sh "/workspace/release/${ASSET}.tar.gz"
+            sh scripts/smoke-standalone-node-runtime.sh /workspace/as-built/opencove-server-linux-x64.tar.gz
 
       - name: SBOM
         uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
