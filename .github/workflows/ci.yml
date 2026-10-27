@@ -71,15 +71,14 @@ jobs:
 
   web-canvas-continuity-ubuntu:
     runs-on: ubuntu-latest
-    # Official Playwright image: browsers and their system libraries are baked in, so no apt step can
-    # stall the job. Its tag must match @playwright/test in pnpm-lock.yaml (ci-e2e-browser-provisioning.spec.ts).
-    container:
-      image: mcr.microsoft.com/playwright:v1.58.2-noble@sha256:6446946a1d9fd62d9ae501312a2d76a43ee688542b21622056a372959b65d63d
-      options: --ipc=host
 
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/share/swift || true
 
       - name: Install pnpm
         uses: pnpm/action-setup@v6
@@ -94,6 +93,11 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Install Web Canvas browsers
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: ''
+        run: pnpm exec playwright install --with-deps chromium webkit
 
       - name: Build
         run: pnpm build
@@ -150,11 +154,6 @@ jobs:
         shard: [1, 2, 3, 4, 5, 6, 7, 8]
 
     runs-on: ubuntu-latest
-    # Official Playwright image: browsers and their system libraries are baked in, so no apt step can
-    # stall the job. Its tag must match @playwright/test in pnpm-lock.yaml (ci-e2e-browser-provisioning.spec.ts).
-    container:
-      image: mcr.microsoft.com/playwright:v1.58.2-noble@sha256:6446946a1d9fd62d9ae501312a2d76a43ee688542b21622056a372959b65d63d
-      options: --ipc=host
 
     steps:
       - name: Checkout
@@ -173,6 +172,12 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      # The runner image already has Chromium's system libraries; `--with-deps` (apt) can take minutes.
+      - name: Install Chromium
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: ''
+        run: pnpm exec playwright install --only-shell chromium
 
       - name: Build
         run: pnpm build

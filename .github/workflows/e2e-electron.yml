@@ -24,15 +24,19 @@ jobs:
         shard: [1, 2, 3]
 
     runs-on: ubuntu-latest
-    # Official Playwright image: browsers and their system libraries are baked in, so no apt step can
-    # stall the job. Its tag must match @playwright/test in pnpm-lock.yaml (ci-e2e-browser-provisioning.spec.ts).
-    container:
-      image: mcr.microsoft.com/playwright:v1.58.2-noble@sha256:6446946a1d9fd62d9ae501312a2d76a43ee688542b21622056a372959b65d63d
-      options: --ipc=host
 
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+
+      - name: Free disk space
+        run: |
+          df -h
+          sudo rm -rf /usr/local/lib/android || true
+          sudo rm -rf /usr/share/dotnet || true
+          sudo rm -rf /opt/ghc || true
+          sudo rm -rf /usr/share/swift || true
+          df -h
 
       - name: Install pnpm
         uses: pnpm/action-setup@v6
@@ -47,6 +51,11 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Install Chromium for Desktop/Web continuity E2E
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: ''
+        run: pnpm exec playwright install --with-deps chromium
 
       - name: Build
         run: pnpm build
