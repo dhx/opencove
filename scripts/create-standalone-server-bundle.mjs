@@ -346,10 +346,15 @@ await writeFile(
 await writeFile(
   resolve(bundleRoot, 'README.txt'),
   [
-    'OpenCove standalone server runtime bundle',
+    // The product name as in src/shared/brand/brand.ts (this script runs as plain Node and cannot import it).
+    'Session Desk server bundle (worker + Web UI)',
+    'Session Desk is based on OpenCove and is not an official OpenCove build.',
     '',
     `Bundled Node.js ${nodeRuntime.node} (module ABI ${nodeRuntime.modules}).`,
-    'Use the release installer script or point a launcher at runtime/node.',
+    'Start the worker (it prints the Web UI address):',
+    '',
+    "  OPENCOVE_WORKER_TOKEN='<token>' OPENCOVE_WEB_UI_PASSWORD='<password>' \\",
+    '    runtime/node/bin/node app/src/app/cli/opencove.mjs worker start --hostname 0.0.0.0',
     '',
   ].join('\n'),
   'utf8',
