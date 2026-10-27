@@ -27,7 +27,7 @@ describe('WebsiteNodeIframe', () => {
     render(<WebsiteNodeIframe url={own} displayTitle="Own" />)
 
     expect(screen.queryByTitle('Own')).toBeNull()
-    expect(screen.getByRole('status')).toHaveTextContent('OpenCove does not show itself')
+    expect(screen.getByRole('status')).toHaveTextContent('Session Desk does not show itself')
   })
 
   it('uses iframe-friendly Google entrypoints for search and home pages', () => {

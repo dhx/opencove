@@ -1,4 +1,4 @@
-# Our own OpenCove server releases (docs/dhx/RELEASES.md). Builds opencove-server-linux-x64.tar.gz from
+# Our own Session Desk server releases (docs/dhx/RELEASES.md). Builds session-desk-server-linux-x64.tar.gz from
 # this fork with a checksum-verified Node runtime, pinned build images and pinned actions, runs upstream's
 # cheap gates and our own release checks, and publishes a GitHub release with checksums, an SBOM and
 # build provenance.
@@ -32,6 +32,9 @@ env:
   NATIVE_BUILD_IMAGE: 'quay.io/pypa/manylinux_2_28_x86_64@sha256:e2808351a165aa85913d79f1f8457b4f6d74047b47fba07b5b9a5e6c0055a017'
   SMOKE_IMAGE: 'debian:bookworm-slim@sha256:7ff6ba31527b9e336162fa061746c366c4b2032f4d2cff2078bea43f78efe3f8'
   PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+  # The published bundle's name, for the file and its top folder. The build names it opencove-server-linux-x64
+  # (upstream's install and managed-SSH code use that name; neither runs from our releases), and Collect repacks it.
+  ASSET: 'session-desk-server-linux-x64'
 
 jobs:
   build:
@@ -110,38 +113,50 @@ jobs:
       - name: Collect
         run: |
           mkdir -p release
-          cp dist/opencove-server-linux-x64.tar.gz release/
-          (cd release && sha256sum opencove-server-linux-x64.tar.gz > SHA256SUMS.txt && cat SHA256SUMS.txt)
+          # Repack under our name: same contents, modes and symlinks, only the top folder renamed.
+          mkdir -p repack
+          tar -xzf dist/opencove-server-linux-x64.tar.gz -C repack
+          mv repack/opencove-server-linux-x64 "repack/${ASSET}"
+          tar -czf "release/${ASSET}.tar.gz" -C repack "${ASSET}"
+          test "$(tar -tzf "release/${ASSET}.tar.gz" | cut -d/ -f1 | sort -u)" = "${ASSET}"
+          test "$(tar -tzvf dist/opencove-server-linux-x64.tar.gz | sed 's#opencove-server-linux-x64/##' | awk '{$4=$5=""; print}' | sort)" \
+            = "$(tar -tzvf "release/${ASSET}.tar.gz" | sed "s#${ASSET}/##" | awk '{$4=$5=""; print}' | sort)"
+          # The bundle as built, for upstream's smoke test: it installs through opencove-install.sh, which expects
+          # upstream's name. Not published.
+          mkdir -p as-built
+          cp dist/opencove-server-linux-x64.tar.gz as-built/
+          (cd as-built && sha256sum opencove-server-linux-x64.tar.gz > SHA256SUMS.txt)
+          (cd release && sha256sum "${ASSET}.tar.gz" > SHA256SUMS.txt && cat SHA256SUMS.txt)
           printf '%s\n' "${{ steps.version.outputs.version }}" > VERSION
 
       - name: Our checks (what the bundle contains, what it reaches)
         run: |
-          mkdir -p extracted && tar -xzf release/opencove-server-linux-x64.tar.gz -C extracted
+          mkdir -p extracted && tar -xzf "release/${ASSET}.tar.gz" -C extracted
           node scripts/dhx/check-release-bundle.mjs "$(dirname "$(find extracted -maxdepth 2 -type d -name app | head -n1)")"
           docker run --rm --network none -v "$PWD:/workspace:ro" -w /workspace "$SMOKE_IMAGE" \
-            sh scripts/dhx/egress-smoke.sh /workspace/release/opencove-server-linux-x64.tar.gz
+            sh scripts/dhx/egress-smoke.sh "/workspace/release/${ASSET}.tar.gz"
 
       - name: Upstream's container smoke test
         run: |
           docker run --rm -v "$PWD:/workspace:ro" -w /workspace "$SMOKE_IMAGE" \
-            sh scripts/smoke-standalone-node-runtime.sh /workspace/release/opencove-server-linux-x64.tar.gz
+            sh scripts/smoke-standalone-node-runtime.sh /workspace/as-built/opencove-server-linux-x64.tar.gz
 
       - name: SBOM
         uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
         with:
           path: extracted
           format: spdx-json
-          output-file: release/opencove-server-linux-x64.spdx.json
+          output-file: release/${{ env.ASSET }}.spdx.json
           upload-artifact: false
 
       - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         if: github.event_name == 'push'
         with:
-          subject-path: release/opencove-server-linux-x64.tar.gz
+          subject-path: release/${{ env.ASSET }}.tar.gz
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
-          name: opencove-server
+          name: session-desk-server
           path: |
             release/
             VERSION
@@ -156,7 +171,7 @@ jobs:
     steps:
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
-          name: opencove-server
+          name: session-desk-server
 
       - name: Release
         env:
@@ -164,5 +179,5 @@ jobs:
           VERSION: ${{ needs.build.outputs.version }}
         run: |
           gh release create "dhx/v${VERSION}" release/* --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
-            --title "OpenCove $VERSION" \
-            --notes "Server build of this fork at ${GITHUB_SHA}. Verify: sha256sum -c SHA256SUMS.txt, and gh attestation verify opencove-server-linux-x64.tar.gz --repo ${GITHUB_REPOSITORY}."
+            --title "Session Desk $VERSION" \
+            --notes "Session Desk server build at ${GITHUB_SHA}. Based on OpenCove; not an official OpenCove build. Verify: sha256sum -c SHA256SUMS.txt, and gh attestation verify ${ASSET}.tar.gz --repo ${GITHUB_REPOSITORY}."

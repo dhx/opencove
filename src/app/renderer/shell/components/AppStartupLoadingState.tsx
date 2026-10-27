@@ -1,5 +1,6 @@
 import React from 'react'
 import { useTranslation } from '@app/renderer/i18n'
+import { PRODUCT_NAME } from '@shared/brand/brand'
 
 export function AppStartupLoadingState(): React.JSX.Element {
   const { t } = useTranslation()
@@ -47,7 +48,7 @@ export function AppStartupLoadingState(): React.JSX.Element {
         <div className="app-startup-state__content">
           <div className="app-startup-state__badge">
             <span className="app-startup-state__badge-dot" aria-hidden="true" />
-            <span>OpenCove</span>
+            <span>{PRODUCT_NAME}</span>
           </div>
           <h1>{t('appStartupState.title')}</h1>
           <p>{t('appStartupState.description')}</p>
