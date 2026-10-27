@@ -1,6 +1,6 @@
 name: CI image
 
-# Builds ci/image/Dockerfile and publishes it as ghcr.io/dhx/opencove-ci:<playwright version>. Pull
+# Builds ci/image/Dockerfile and publishes it as ghcr.io/dhx/session-desk-ci:<playwright version>. Pull
 # requests build it without publishing. After a publish, pin the new digest in the browser jobs
 # (ci-e2e-browser-provisioning.spec.ts checks that they use it).
 
@@ -35,7 +35,7 @@ jobs:
         run: |
           version=$(sed -n 's#^FROM mcr\.microsoft\.com/playwright:v\([0-9.]*\)-noble@.*#\1#p' ci/image/Dockerfile)
           test -n "$version" || { echo "::error file=ci/image/Dockerfile::FROM must name a pinned Playwright noble image"; exit 1; }
-          echo "image=ghcr.io/dhx/opencove-ci" >> "$GITHUB_OUTPUT"
+          echo "image=ghcr.io/dhx/session-desk-ci" >> "$GITHUB_OUTPUT"
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
       - name: Log in to GHCR
@@ -58,7 +58,7 @@ jobs:
           labels: |
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
-            org.opencontainers.image.description=OpenCove CI: Playwright ${{ steps.tag.outputs.version }} with node-gyp tools and Electron's GTK 3
+            org.opencontainers.image.description=Session Desk CI: Playwright ${{ steps.tag.outputs.version }} with node-gyp tools and Electron's GTK 3
 
       - name: Digest to pin
         if: github.event_name != 'pull_request'
