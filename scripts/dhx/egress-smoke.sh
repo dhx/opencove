@@ -2,7 +2,7 @@
 # Release check: the server bundle's worker, used without a network, tries to reach nothing but loopback.
 # Run in a container without a network (docker run --network none …); the guard records every attempt.
 #
-#   egress-smoke.sh <opencove-server-linux-x64.tar.gz>
+#   egress-smoke.sh <session-desk-server-linux-x64.tar.gz>
 set -eu
 ASSET="$1"
 ROOT="$(mktemp -d)"
