@@ -53,7 +53,7 @@ jobs:
           if [ "${3:-}" != success ]; then
             echo "the release build of $COMMIT did not succeed (${run:-none found})" >&2; exit 1
           fi
-          gh run download "$1" --repo "$GITHUB_REPOSITORY" --name opencove-server --dir build
+          gh run download "$1" --repo "$GITHUB_REPOSITORY" --name session-desk-server --dir build
           version="$(cat build/VERSION)"
           if git rev-parse -q --verify "refs/tags/dhx/v${version}" >/dev/null; then
             echo "dhx/v${version} exists on another commit (pushed while it was released); re-run dhx release for main" >&2
@@ -61,5 +61,5 @@ jobs:
           fi
           (cd build/release && sha256sum -c SHA256SUMS.txt)
           gh release create "dhx/v${version}" build/release/* --repo "$GITHUB_REPOSITORY" --target "$COMMIT" \
-            --title "OpenCove $version" \
-            --notes "Server build of this fork at ${COMMIT}, built while CI ran and released when CI was green. Verify: sha256sum -c SHA256SUMS.txt, and gh attestation verify opencove-server-linux-x64.tar.gz --repo ${GITHUB_REPOSITORY}."
+            --title "Session Desk $version" \
+            --notes "Session Desk server build at ${COMMIT}, built while CI ran and released when CI was green. Based on OpenCove; not an official OpenCove build. Verify: sha256sum -c SHA256SUMS.txt, and gh attestation verify session-desk-server-linux-x64.tar.gz --repo ${GITHUB_REPOSITORY}."

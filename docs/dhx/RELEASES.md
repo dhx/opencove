@@ -1,7 +1,9 @@
-# Our OpenCove releases
+# Our Session Desk releases
 
-This fork builds its own OpenCove **server** releases (`opencove-server-linux-x64.tar.gz`, worker + Web UI)
-for [opencove-image](https://github.com/dhx/opencove-image). They are upstream's code plus our changes
+This fork, Session Desk, builds its own **server** releases (`session-desk-server-linux-x64.tar.gz`, worker + Web UI)
+for [session-desk-image](https://github.com/dhx/session-desk-image). The build names the bundle
+`opencove-server-linux-x64`, as upstream does; the release workflow repacks it so file and top folder carry our name.
+Upstream's installer scripts and managed SSH still expect the old name, but neither runs from our releases. They are upstream's code plus our changes
 (the list below), built by `.github/workflows/dhx-release.yml`.
 
 ## Cutting a release
@@ -37,7 +39,7 @@ git tag dhx/v0.4.1-dhx-001 && git push origin dhx/v0.4.1-dhx-001
 
   ```sh
   sha256sum -c SHA256SUMS.txt
-  gh attestation verify opencove-server-linux-x64.tar.gz --repo dhx/opencove
+  gh attestation verify session-desk-server-linux-x64.tar.gz --repo dhx/session-desk
   ```
 
 ## What a release checks
@@ -91,7 +93,7 @@ wait for.
   pnpm exec playwright test -c playwright.e2e-web.config.ts tests/e2e/command-center.spec.ts
   ```
 
-  `OPENCOVE_E2E_WEB_SERVER_DIR=<unpacked opencove-server-linux-x64>` runs a release bundle's own Node and
+  `OPENCOVE_E2E_WEB_SERVER_DIR=<folder of an unpacked release>` runs a release bundle's own Node and
   app instead of the build (the worker otherwise runs under Electron's Node, like the web canvas suite).
   `OPENCOVE_E2E_PIPE_ELECTRON_LOGS=1` shows the worker's log.
 
@@ -120,4 +122,7 @@ merge, and a returning phone-home shows up in the checks.
 | Agents without permission bypass unless `OPENCOVE_AGENT_FULL_ACCESS` allows it; no executable/env overrides from the API; `approveRoot` refuses `/`, home and secret folders; SSH host/user validated; terminal shims send only what they need (`OPENCOVE_TERMINAL_AGENT_SHIMS=0` turns them off); no startup rewrite of `~/.claude`/`~/.codex`; private OpenCode config | Agents and API callers cannot escalate on their own (#5) |
 | Upstream's Electron E2E suite also runs against the Web UI (`e2e-web` in `ci.yml`, `tests/e2e/webTarget/`, `playwright.e2e-web.config.ts`); Electron-only tests are in a checked skip list. The Web UI passes terminal foreground events to agent overlays | Releases are gated on what we ship, not on the desktop app; the suite found the missing foreground events (#9) |
 | Canvas images in the Web UI: the worker keeps them as the desktop app does (`<userData>/canvas-images/<assetId>`) behind `PUT`/`GET`/`DELETE /canvas-images/<assetId>` | Pasting or dropping an image onto the canvas failed in the Web UI ("Canvas image uploads are unavailable") (#12) |
+| A CI image for the browser E2E jobs (`ci/image/Dockerfile`, `.github/workflows/ci-image.yml`, `ghcr.io/dhx/opencove-ci`): the Playwright image plus node-gyp tools and Electron's GTK 3. A Playwright bump means: new `FROM` tag and digest, publish, then pin the new digest in the jobs | No test run installs browsers or packages through apt |
+| Named **Session Desk** in what people read: the Web UI's text (applied once where translations are looked up, `src/shared/brand/brand.ts`), page titles, the tab icon, and a not-official note on the login page and in the README. Code identifiers, the `opencove` CLI, package names and the release tarball keep upstream's names | OpenCove's `TRADEMARKS.md` asks a modified build to use a distinct name and say it is not official; keeping identifiers keeps upstream merges easy |
+| Releases are titled **Session Desk** and published as `session-desk-server-linux-x64.tar.gz`, top folder included; their notes say the build is not an official OpenCove build | OpenCove's `TRADEMARKS.md` asks a modified build's distribution to use its own name |
 | Files dropped onto the canvas in the Web UI are uploaded into the project (`<space or project folder>/dropped/`, `x-drop-directory` on `/files/drop`, only inside approved roots) and placed as file cards; folders get a message | A browser cannot pass a file's path, so the canvas refused dropped files; now they are kept with the project, agents find them next to the code, and they open in the document editor (#13) |
