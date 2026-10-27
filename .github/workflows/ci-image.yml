@@ -1,0 +1,67 @@
+name: CI image
+
+# Builds ci/image/Dockerfile and publishes it as ghcr.io/dhx/opencove-ci:<playwright version>. Pull
+# requests build it without publishing. After a publish, pin the new digest in the browser jobs
+# (ci-e2e-browser-provisioning.spec.ts checks that they use it).
+
+on:
+  push:
+    branches: [main]
+    paths: [ci/image/**, .github/workflows/ci-image.yml]
+  pull_request:
+    branches: [main]
+    paths: [ci/image/**, .github/workflows/ci-image.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-image-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Tag from the Playwright version in the Dockerfile
+        id: tag
+        run: |
+          version=$(sed -n 's#^FROM mcr\.microsoft\.com/playwright:v\([0-9.]*\)-noble@.*#\1#p' ci/image/Dockerfile)
+          test -n "$version" || { echo "::error file=ci/image/Dockerfile::FROM must name a pinned Playwright noble image"; exit 1; }
+          echo "image=ghcr.io/dhx/opencove-ci" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to GHCR
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and publish
+        id: build
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: ci/image
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: |
+            ${{ steps.tag.outputs.image }}:${{ steps.tag.outputs.version }}
+            ${{ steps.tag.outputs.image }}:${{ steps.tag.outputs.version }}-${{ github.sha }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.description=OpenCove CI: Playwright ${{ steps.tag.outputs.version }} with node-gyp tools and Electron's GTK 3
+
+      - name: Digest to pin
+        if: github.event_name != 'pull_request'
+        run: |
+          echo "Pin in ci.yml and e2e-electron.yml:" >> "$GITHUB_STEP_SUMMARY"
+          echo '`${{ steps.tag.outputs.image }}:${{ steps.tag.outputs.version }}@${{ steps.build.outputs.digest }}`' >> "$GITHUB_STEP_SUMMARY"
