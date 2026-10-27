@@ -34,8 +34,6 @@ import { TerminalNodeFrame } from './terminalNode/TerminalNodeFrame'
 import { resolveAgentNodeMinSize, resolveCanonicalNodeMinSize } from '../utils/workspaceNodeSizing'
 import type { TerminalNodeProps } from './TerminalNode.types'
 import { useLatestCallbackRef } from './terminalNode/useLatestCallbackRef'
-import { useEndedSessionInput } from './terminalNode/endedSessionInput'
-
 export function TerminalNode({
   nodeId,
   sessionId,
@@ -239,7 +237,6 @@ export function TerminalNode({
   useEffect(() => {
     rendererRecoveryPendingRef.current = false
   }, [sessionId, terminalClientResetVersion])
-  useEndedSessionInput({ terminalRef, status, sessionId, isTerminalHydrated })
 
   const syncTerminalSize = useCallback(() => {
     refreshTerminalNodeSize({

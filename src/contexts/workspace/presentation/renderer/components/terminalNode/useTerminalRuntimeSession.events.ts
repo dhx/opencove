@@ -14,6 +14,7 @@ import type { registerTerminalDiagnostics } from './registerDiagnostics'
 import type { createOptionalOpenCodeThemeBridge } from './openCodeThemeBridgeFactory'
 import type { TerminalRendererRecoveryRequest } from './runtimeRendererHealth'
 import { markTerminalGeometryAccepted } from './terminalGeometryCoordinator'
+import { stopEndedSessionInput } from './endedSessionInput'
 
 type PtyEventHub = ReturnType<typeof getPtyEventHub>
 type TerminalDiagnostics = ReturnType<typeof registerTerminalDiagnostics>
@@ -68,6 +69,7 @@ export function subscribeRuntimeTerminalEvents({
   })
   const unsubscribeExit = ptyEventHub.onSessionExit(sessionId, event => {
     hydrationRouter.handleExit(event.exitCode)
+    stopEndedSessionInput(terminal)
   })
   const unsubscribeGeometry = ptyEventHub.onSessionGeometry(sessionId, event => {
     lastCommittedPtySizeRef.current = { cols: event.cols, rows: event.rows }
