@@ -461,7 +461,7 @@ describe('SpaceWorktreeWindow archive flow', () => {
 
     expect(
       await screen.findByText(
-        'Worktree API is unavailable. Please restart OpenCove and try again.',
+        'Worktree API is unavailable. Please restart Session Desk and try again.',
       ),
     ).toBeVisible()
   })

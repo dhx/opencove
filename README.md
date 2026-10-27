@@ -1,3 +1,7 @@
+> **Session Desk** is a fork of [OpenCove](https://github.com/DeadWaveWave/opencove) that ships only the server build
+> (worker + Web UI). It is **not an official OpenCove build**; the OpenCove name and logo belong to its steward
+> ([TRADEMARKS.md](./TRADEMARKS.md)). What this fork changes: [docs/dhx/RELEASES.md](./docs/dhx/RELEASES.md).
+
 <div align="center">
 
 # OpenCove 🌌

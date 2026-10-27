@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react'
 import { DEFAULT_UI_LANGUAGE, type UiLanguage } from '@contexts/settings/domain/agentSettings'
+import { brandText } from '@shared/brand/brand'
 import { en } from './locales/en'
 import type { TranslationDictionary } from './locales/schema'
 import { zhCN } from './locales/zh-CN'
@@ -60,7 +61,7 @@ function translateForLanguage(
     for (const candidate of candidateKeys) {
       const value = resolveValue(dictionary, candidate)
       if (typeof value === 'string') {
-        return interpolate(value, options)
+        return interpolate(brandText(value), options)
       }
     }
   }

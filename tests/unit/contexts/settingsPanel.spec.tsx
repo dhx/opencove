@@ -480,7 +480,7 @@ describe('SettingsPanel', () => {
 
     expect(await screen.findByText('Performance Diagnostics')).toBeVisible()
     await waitFor(() => expect(getSnapshot).toHaveBeenCalledTimes(1))
-    expect(screen.getByText('OpenCove renderer')).toBeVisible()
+    expect(screen.getByText('Session Desk renderer')).toBeVisible()
     expect(screen.getByText('Codex CLI')).toBeVisible()
     expect(screen.getByText('12.0 MB')).toBeVisible()
     expect(screen.getByText('Threads')).toBeVisible()
