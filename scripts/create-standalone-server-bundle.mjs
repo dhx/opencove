@@ -255,6 +255,8 @@ async function rebuildAndVerifyNativeModules({
     "const pty=requireFromApp('node-pty')",
     "if(typeof pty.spawn!=='function')throw new Error('node-pty did not expose spawn')",
     "if(process.platform==='win32')requireFromApp('node-pty/lib/windowsConsoleGeometry').assertWindowsConsoleGeometryAvailable()",
+    // Prebuilt N-API binary for voice; loading it proves its libonnxruntime.so.1 came along.
+    "if(typeof requireFromApp('onnxruntime-node').InferenceSession?.create!=='function')throw new Error('onnxruntime-node did not expose InferenceSession')",
     "if(process.versions.electron)throw new Error('bundled runtime is Electron, not pure Node')",
     "process.stdout.write('native modules loaded with Node ABI '+process.versions.modules+'\\n')",
   ].join(';')

@@ -4,6 +4,17 @@ import { resolve } from 'node:path'
 export const STANDALONE_NATIVE_MODULE_NAMES = ['better-sqlite3', 'node-pty']
 
 /**
+ * Native files that ship prebuilt inside their npm package and are used as is, never rebuilt with
+ * node-gyp. They are N-API, so one binary serves both Electron and the bundled Node. Only the
+ * linux-x64 CPU files are packed (see `build.linux.files` in package.json); these are what the
+ * glibc floor check reads, relative to the bundle's `node_modules`.
+ */
+export const STANDALONE_PREBUILT_NATIVE_ARTIFACTS = Object.freeze([
+  ['onnxruntime-node', 'bin', 'napi-v3', 'linux', 'x64', 'onnxruntime_binding.node'],
+  ['onnxruntime-node', 'bin', 'napi-v3', 'linux', 'x64', 'libonnxruntime.so.1'],
+])
+
+/**
  * Executables that some native modules produce on some platforms only. node-pty gates its
  * spawn-helper target behind `OS=="mac"` in binding.gyp, so a Linux or Windows bundle never
  * contains it. Anything listed here is chmod-ed only when it actually exists.

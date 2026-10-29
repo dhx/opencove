@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  STANDALONE_BUNDLED_SHARED_LIBRARIES,
   STANDALONE_GLIBC_FLOOR,
   formatFloorViolations,
   parseVersionedSymbolRequirements,
@@ -139,6 +140,65 @@ describe('standalone glibc floor', () => {
   })
 })
 
+/**
+ * Abridged from onnxruntime-node 1.21.0's `onnxruntime_binding.node`. `VERS_1.21.0` is the symbol
+ * version of the `libonnxruntime.so.1` that ships next to it, not something the host provides.
+ */
+const readelfWithBundledLibraryNeed = `
+Version needs section '.gnu.version_r' contains 2 entries:
+ 0x0000: Version: 1  File: libonnxruntime.so.1  Cnt: 1
+  0x0010:   Name: VERS_1.21.0  Flags: none  Version: 2
+ 0x0020: Version: 1  File: libc.so.6  Cnt: 1
+  0x0030:   Name: GLIBC_2.14  Flags: none  Version: 3
+`
+
+/**
+ * Abridged from onnxruntime-node 1.21.0's `libonnxruntime.so.1`, which *defines* `VERS_1.21.0`.
+ * A definition is what the library offers, not what it asks of the host.
+ */
+const readelfWithVersionDefinition = `
+Version definition section '.gnu.version_d' contains 2 entries:
+  000000: Rev: 1  Flags: BASE  Index: 1  Cnt: 1  Name: libonnxruntime.so.1
+  0x001c: Rev: 1  Flags: none  Index: 2  Cnt: 1  Name: VERS_1.21.0
+
+Version needs section '.gnu.version_r' contains 1 entry:
+ 0x0000: Version: 1  File: libc.so.6  Cnt: 1
+  0x0010:   Name: GLIBC_2.28  Flags: none  Version: 3
+`
+
+describe('version definitions', () => {
+  it('reads only the needs section, not what the artifact defines', () => {
+    expect(parseVersionedSymbolRequirements(readelfWithVersionDefinition)).toEqual([
+      { library: 'GLIBC', version: '2.28' },
+    ])
+  })
+})
+
+describe('version needs of libraries the bundle ships itself', () => {
+  it('flags them as an unknown family by default', () => {
+    const requirements = parseVersionedSymbolRequirements(readelfWithBundledLibraryNeed)
+    expect(selectFloorViolations(requirements)).toEqual([{ library: 'VERS', version: '1.21.0' }])
+  })
+
+  it('leaves them out when the library is named as bundled', () => {
+    expect(
+      parseVersionedSymbolRequirements(readelfWithBundledLibraryNeed, {
+        bundledLibraries: STANDALONE_BUNDLED_SHARED_LIBRARIES,
+      }),
+    ).toEqual([{ library: 'GLIBC', version: '2.14' }])
+  })
+
+  it('counts a read artifact as read even when every need is on a bundled library', () => {
+    const onlyBundled = readelfWithBundledLibraryNeed.split(' 0x0020:')[0]
+    expect(
+      parseVersionedSymbolRequirements(onlyBundled, {
+        requireSymbols: true,
+        bundledLibraries: STANDALONE_BUNDLED_SHARED_LIBRARIES,
+      }),
+    ).toEqual([])
+  })
+})
+
 describe('glibc floor artifact scope', () => {
   const scope = {
     appRoot: '/bundle/app',
@@ -151,6 +211,9 @@ describe('glibc floor artifact scope', () => {
       '/bundle/app/node_modules/better-sqlite3/build/Release/better_sqlite3.node',
       // node-pty's binary name does not match its package name.
       '/bundle/app/node_modules/node-pty/build/Release/pty.node',
+      // Prebuilt, not rebuilt: onnxruntime-node ships its linux-x64 binaries in the npm package.
+      '/bundle/app/node_modules/onnxruntime-node/bin/napi-v3/linux/x64/onnxruntime_binding.node',
+      '/bundle/app/node_modules/onnxruntime-node/bin/napi-v3/linux/x64/libonnxruntime.so.1',
     ])
   })
 
