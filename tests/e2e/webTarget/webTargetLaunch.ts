@@ -59,7 +59,9 @@ function definedEnv(source: Record<string, string | undefined>): Record<string, 
 }
 
 function resolveChromiumArgs(): string[] {
-  return process.platform === 'linux' ? ['--disable-dev-shm-usage'] : []
+  // A fake microphone that is granted without a prompt, for the voice specs.
+  const fakeMedia = ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream']
+  return process.platform === 'linux' ? ['--disable-dev-shm-usage', ...fakeMedia] : fakeMedia
 }
 
 export async function launchWebApp(
