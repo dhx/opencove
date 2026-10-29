@@ -122,6 +122,10 @@ export default defineConfig(({ command }) => {
             ),
             managedRuntime: resolve(__dirname, 'src/app/managedRuntime/index.ts'),
             ptyHost: resolve(__dirname, 'src/platform/process/ptyHost/entry.ts'),
+            voiceHost: resolve(
+              __dirname,
+              'src/contexts/voice/infrastructure/localEngine/voiceHostEntry.ts',
+            ),
             windowsConsoleObserver: resolve(
               __dirname,
               'src/platform/process/ptyHost/windowsConsoleObserverEntry.ts',

@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { VoiceEngine } from '../../../src/contexts/voice/application/VoiceEngine'
+import {
+  VoiceModelsMissingError,
+  type VoiceEngine,
+} from '../../../src/contexts/voice/application/VoiceEngine'
 import { VoiceService } from '../../../src/contexts/voice/application/VoiceService'
 
 function createEngine(prepare: VoiceEngine['prepare']) {
@@ -30,6 +33,20 @@ describe('VoiceService', () => {
     await expect(service.transcribe(new Float32Array(1))).resolves.toBe('text')
     expect(service.getStatus()).toEqual({ state: 'ready' })
     expect(engine.prepare).toHaveBeenCalledTimes(2)
+  })
+
+  it('says when the server has no models, so the UI can tell voice is not installed', async () => {
+    const { engine } = createEngine(async () => {
+      throw new VoiceModelsMissingError('no models in /opt/models')
+    })
+    const service = new VoiceService(engine)
+
+    await expect(service.prepare()).rejects.toBeInstanceOf(VoiceModelsMissingError)
+    expect(service.getStatus()).toEqual({
+      state: 'error',
+      reason: 'models_missing',
+      message: 'no models in /opt/models',
+    })
   })
 
   it('goes back to idle when the engine loses its models, and reloads on demand', async () => {

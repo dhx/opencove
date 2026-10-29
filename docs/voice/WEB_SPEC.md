@@ -55,6 +55,9 @@ These are pure code with tests, copied from MaxAI's `src/contexts/voice/`:
 - `LocalVoiceEngine` forks it lazily on the first `prepare`. It **unloads after 10 minutes idle**, which frees roughly 0.5 GB of RAM.
 - The host handles one request at a time, as in MaxAI. The worker queues requests: one turn per worker, and a second client gets `voice.busy`.
 - transformers is set offline: `env.allowRemoteModels = false`, `env.localModelPath = $OPENCOVE_VOICE_MODELS_DIR`. If no models are present, `prepare` fails with `voice.models_missing`, and the settings page says voice isn't installed on this server.
+- transformers' ESM and CJS builds are separate instances, each with its own `env`. The host sets both offline, so the rule holds whichever one kokoro-js and the bundler pick.
+- The host inherits only `PATH`, `HOME`, `TMPDIR`, locale, `TZ` and thread settings from the worker. It runs third-party model code and needs none of the worker's credentials.
+- kokoro-js is imported only inside the host and only once the models are known to exist (see phonemizer under Feasibility results).
 
 ### 2. Worker routes
 

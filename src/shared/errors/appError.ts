@@ -88,6 +88,8 @@ function createMessageMap(): Record<AppErrorCode, string> {
     'update.download_failed': 'Unable to download the update.',
     'update.install_failed': 'Unable to install the update.',
     'release_notes.get_current_failed': 'Unable to load release notes.',
+    'voice.models_missing': 'Voice is not installed on this server.',
+    'voice.prepare_failed': 'Unable to load the voice models.',
   }
 }
 

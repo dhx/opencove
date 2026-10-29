@@ -1,6 +1,6 @@
 import type { VoiceEngineStatus } from '../../../shared/contracts/dto'
 import type { KokoroVoiceId } from '../domain/voiceSettings'
-import type { VoiceAudioChunk, VoiceEngine } from './VoiceEngine'
+import { VoiceModelsMissingError, type VoiceAudioChunk, type VoiceEngine } from './VoiceEngine'
 
 /**
  * Owns the engine's load state.
@@ -65,7 +65,13 @@ export class VoiceService {
     } catch (error) {
       if (isCurrent()) {
         this.preparing = null
-        this.setStatus({ state: 'error', message: describeError(error) })
+        this.setStatus({
+          state: 'error',
+          ...(error instanceof VoiceModelsMissingError
+            ? { reason: 'models_missing' as const }
+            : {}),
+          message: describeError(error),
+        })
       }
       throw error
     }
