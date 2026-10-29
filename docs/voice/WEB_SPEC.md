@@ -69,6 +69,10 @@ These follow the `/files/drop` pattern: same-origin cookie or bearer auth, a cus
 | `POST /voice/speak` | JSON `{ text, voice }` | `application/octet-stream`, chunked: per sentence a 12-byte header (`u32` sample rate, `u32` sample count, `u32` sequence) and then f32 samples | text ≤ 4 KB; client abort ends synthesis after the current sentence |
 | `voice.status` / `voice.prepare` | control-surface query and command via `/invoke` | load state and progress | — |
 
+Both routes also take `x-opencove-voice-client: <tab id>`. A tab's own requests wait their turn; while one tab is in a request, any other gets 409 `voice.busy`. A new press interrupts the reply still playing, and that reply only stops after its current sentence, so the same tab must queue rather than be turned away. The header is not a security boundary, only a courtesy between tabs.
+
+Auth failures answer 401; an authenticated request without `x-opencove-voice: 1` answers 403. A missing model answers 503 `voice.models_missing`. Speech is written with backpressure: the next sentence is synthesized only once the socket has taken the last one.
+
 The route file is new and registered once in the request handler. Nothing is added to `ptyStreamHub` or the WebSocket protocol.
 
 ### 3. Browser capture

@@ -86,7 +86,8 @@ export class VoiceService {
     text: string,
     voice: KokoroVoiceId,
     signal: AbortSignal,
-    onChunk: (chunk: VoiceAudioChunk) => void,
+    /** May return a promise; the next chunk is asked for only once it settles (backpressure). */
+    onChunk: (chunk: VoiceAudioChunk) => void | Promise<void>,
   ): Promise<{ chunkCount: number; cancelled: boolean }> {
     await this.prepare()
     let chunkCount = 0
@@ -94,7 +95,7 @@ export class VoiceService {
       if (signal.aborted) {
         break
       }
-      onChunk(chunk)
+      await onChunk(chunk)
       chunkCount += 1
     }
     return { chunkCount, cancelled: signal.aborted }

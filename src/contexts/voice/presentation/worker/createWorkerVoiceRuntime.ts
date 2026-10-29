@@ -1,5 +1,6 @@
 import type { ControlSurface } from '../../../../app/main/controlSurface/controlSurface'
 import type { VoiceEngine } from '../../application/VoiceEngine'
+import { VoiceRequestGate } from '../../application/VoiceRequestGate'
 import { VoiceService } from '../../application/VoiceService'
 import { forkVoiceHost } from '../../infrastructure/localEngine/forkVoiceHost'
 import { LocalVoiceEngine } from '../../infrastructure/localEngine/LocalVoiceEngine'
@@ -8,6 +9,8 @@ import { registerVoiceHandlers } from './registerVoiceHandlers'
 
 export interface WorkerVoiceRuntime {
   service: VoiceService
+  /** One voice turn per worker, shared by both routes. */
+  gate: VoiceRequestGate
   registerHandlers(controlSurface: ControlSurface): void
   dispose(): Promise<void>
 }
@@ -38,6 +41,7 @@ export function createWorkerVoiceRuntime(options: {
   const service = new VoiceService(createWorkerVoiceEngine(options))
   return {
     service,
+    gate: new VoiceRequestGate(),
     registerHandlers: controlSurface => registerVoiceHandlers(controlSurface, { service }),
     dispose: () => service.dispose(),
   }

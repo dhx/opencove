@@ -90,6 +90,9 @@ function createMessageMap(): Record<AppErrorCode, string> {
     'release_notes.get_current_failed': 'Unable to load release notes.',
     'voice.models_missing': 'Voice is not installed on this server.',
     'voice.prepare_failed': 'Unable to load the voice models.',
+    'voice.busy': 'Voice is in use by another client on this server.',
+    'voice.transcribe_failed': 'Unable to transcribe the recording.',
+    'voice.speak_failed': 'Unable to speak the reply.',
   }
 }
 

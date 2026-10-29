@@ -30,6 +30,12 @@ import {
   isHtmlContentType,
 } from './http/webUiSecurityHeaders'
 import { FILE_DROP_PATH, handleFileDropRoute } from './http/fileDropRoute'
+import type { WorkerVoiceRuntime } from '../../../contexts/voice/presentation/worker/createWorkerVoiceRuntime'
+import {
+  handleVoiceRoute,
+  hasVoiceCsrfHeader,
+  isVoiceRoutePath,
+} from '../../../contexts/voice/presentation/worker/voiceRoutes'
 import {
   handleCanvasImageRoute,
   isCanvasImageMutation,
@@ -66,6 +72,8 @@ export interface ControlSurfaceHttpRequestHandlerDeps {
   canvasImagesDirectory?: string
   /** Decides where a file dropped onto the canvas may go (`x-drop-directory`); unset refuses. */
   approvedWorkspaces?: ApprovedWorkspaceStore
+  /** Speech in and out (`/voice/*`); unset leaves those paths unknown. */
+  voice?: WorkerVoiceRuntime
 }
 
 function listenerAllowsAuth(
@@ -336,6 +344,28 @@ export function createControlSurfaceHttpRequestHandler(
         dropsDirectory: deps.dropsDirectory,
         now: deps.ctx.now(),
         approvedWorkspaces: deps.approvedWorkspaces,
+      })
+      return
+    }
+
+    if (req.method === 'POST' && deps.voice && isVoiceRoutePath(url.pathname)) {
+      if (!isAuthorizedFileRequest({ deps, req, url, listener, requireCustomHeader: false })) {
+        req.resume()
+        sendJson(res, 401, buildUnauthorizedResult())
+        return
+      }
+      // Authenticated, but not from the Web UI's own code: a cross-site post cannot set it.
+      if (!hasVoiceCsrfHeader(req)) {
+        req.resume()
+        sendJson(res, 403, buildUnauthorizedResult())
+        return
+      }
+      await handleVoiceRoute({
+        req,
+        res,
+        pathname: url.pathname,
+        service: deps.voice.service,
+        gate: deps.voice.gate,
       })
       return
     }

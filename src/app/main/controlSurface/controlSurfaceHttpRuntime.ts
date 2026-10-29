@@ -297,6 +297,7 @@ export function createControlSurfaceHttpRuntime(
     dropsDirectory: resolve(options.userDataPath, 'drops'),
     canvasImagesDirectory: resolveCanvasImageStoreDir(options.userDataPath),
     approvedWorkspaces: options.approvedWorkspaces,
+    voice,
   })
 
   const runtime: ControlSurfaceHttpRuntime = {
