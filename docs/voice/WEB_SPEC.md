@@ -55,6 +55,9 @@ These are pure code with tests, copied from MaxAI's `src/contexts/voice/`:
 - `LocalVoiceEngine` forks it lazily on the first `prepare`. It **unloads after 10 minutes idle**, which frees roughly 0.5 GB of RAM.
 - The host handles one request at a time, as in MaxAI. The worker queues requests: one turn per worker, and a second client gets `voice.busy`.
 - transformers is set offline: `env.allowRemoteModels = false`, `env.localModelPath = $OPENCOVE_VOICE_MODELS_DIR`. If no models are present, `prepare` fails with `voice.models_missing`, and the settings page says voice isn't installed on this server.
+- transformers' ESM and CJS builds are separate instances, each with its own `env`. The host sets both offline, so the rule holds whichever one kokoro-js and the bundler pick.
+- The host inherits only `PATH`, `HOME`, `TMPDIR`, locale, `TZ` and thread settings from the worker. It runs third-party model code and needs none of the worker's credentials.
+- kokoro-js is imported only inside the host and only once the models are known to exist (see phonemizer under Feasibility results).
 
 ### 2. Worker routes
 
@@ -65,6 +68,10 @@ These follow the `/files/drop` pattern: same-origin cookie or bearer auth, a cus
 | `POST /voice/transcribe` | raw Int16 LE PCM, 16 kHz mono; header `x-opencove-voice: 1` | JSON `{ text }` | 60 s of audio (1.92 MB); checked against Content-Length and while streaming |
 | `POST /voice/speak` | JSON `{ text, voice }` | `application/octet-stream`, chunked: per sentence a 12-byte header (`u32` sample rate, `u32` sample count, `u32` sequence) and then f32 samples | text ≤ 4 KB; client abort ends synthesis after the current sentence |
 | `voice.status` / `voice.prepare` | control-surface query and command via `/invoke` | load state and progress | — |
+
+Both routes also take `x-opencove-voice-client: <tab id>`. A tab's own requests wait their turn; while one tab is in a request, any other gets 409 `voice.busy`. A new press interrupts the reply still playing, and that reply only stops after its current sentence, so the same tab must queue rather than be turned away. The header is not a security boundary, only a courtesy between tabs.
+
+Auth failures answer 401; an authenticated request without `x-opencove-voice: 1` answers 403. A missing model answers 503 `voice.models_missing`. Speech is written with backpressure: the next sentence is synthesized only once the socket has taken the last one.
 
 The route file is new and registered once in the request handler. Nothing is added to `ptyStreamHub` or the WebSocket protocol.
 

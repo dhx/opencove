@@ -1,6 +1,6 @@
 import type { VoiceEngineStatus } from '../../../shared/contracts/dto'
 import type { KokoroVoiceId } from '../domain/voiceSettings'
-import type { VoiceAudioChunk, VoiceEngine } from './VoiceEngine'
+import { VoiceModelsMissingError, type VoiceAudioChunk, type VoiceEngine } from './VoiceEngine'
 
 /**
  * Owns the engine's load state.
@@ -65,7 +65,13 @@ export class VoiceService {
     } catch (error) {
       if (isCurrent()) {
         this.preparing = null
-        this.setStatus({ state: 'error', message: describeError(error) })
+        this.setStatus({
+          state: 'error',
+          ...(error instanceof VoiceModelsMissingError
+            ? { reason: 'models_missing' as const }
+            : {}),
+          message: describeError(error),
+        })
       }
       throw error
     }
@@ -80,7 +86,8 @@ export class VoiceService {
     text: string,
     voice: KokoroVoiceId,
     signal: AbortSignal,
-    onChunk: (chunk: VoiceAudioChunk) => void,
+    /** May return a promise; the next chunk is asked for only once it settles (backpressure). */
+    onChunk: (chunk: VoiceAudioChunk) => void | Promise<void>,
   ): Promise<{ chunkCount: number; cancelled: boolean }> {
     await this.prepare()
     let chunkCount = 0
@@ -88,7 +95,7 @@ export class VoiceService {
       if (signal.aborted) {
         break
       }
-      onChunk(chunk)
+      await onChunk(chunk)
       chunkCount += 1
     }
     return { chunkCount, cancelled: signal.aborted }

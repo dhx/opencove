@@ -27,6 +27,7 @@ import { initializeTerminalRuntimeAvailability } from './terminalRecovery/termin
 import { createControlSurfaceHttpServerContext } from './controlSurfaceHttpServerContext'
 import { createTerminalAgentActivityRuntime } from './terminalAgentActivityRuntime'
 import { normalizeControlSurfaceAppVersion } from './controlSurfaceHttpServer.contract'
+import { createWorkerVoiceRuntime } from '../../../contexts/voice/presentation/worker/createWorkerVoiceRuntime'
 import type {
   ControlSurfaceHttpListener,
   ControlSurfaceHttpRuntime,
@@ -216,6 +217,11 @@ export function createControlSurfaceHttpRuntime(
     })
   }
   registerPluginDistributionHandlers(controlSurface, pluginDistribution)
+  const voice = createWorkerVoiceRuntime({
+    env: process.env,
+    reportIssue: message => process.stderr.write(`${message}\n`),
+  })
+  voice.registerHandlers(controlSurface)
   registerControlSurfaceHandlers(controlSurface, {
     context: ctx,
     plugins,
@@ -291,6 +297,7 @@ export function createControlSurfaceHttpRuntime(
     dropsDirectory: resolve(options.userDataPath, 'drops'),
     canvasImagesDirectory: resolveCanvasImageStoreDir(options.userDataPath),
     approvedWorkspaces: options.approvedWorkspaces,
+    voice,
   })
 
   const runtime: ControlSurfaceHttpRuntime = {
@@ -353,6 +360,7 @@ export function createControlSurfaceHttpRuntime(
         )
         await acceptedRequests.sealAndDrain()
         await plugins.dispose()
+        await voice.dispose().catch(() => undefined)
 
         try {
           await terminalAgents.dispose()

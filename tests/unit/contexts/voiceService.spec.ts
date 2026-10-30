@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { VoiceEngine } from '../../../src/contexts/voice/application/VoiceEngine'
+import {
+  VoiceModelsMissingError,
+  type VoiceEngine,
+} from '../../../src/contexts/voice/application/VoiceEngine'
 import { VoiceService } from '../../../src/contexts/voice/application/VoiceService'
 
 function createEngine(prepare: VoiceEngine['prepare']) {
@@ -30,6 +33,20 @@ describe('VoiceService', () => {
     await expect(service.transcribe(new Float32Array(1))).resolves.toBe('text')
     expect(service.getStatus()).toEqual({ state: 'ready' })
     expect(engine.prepare).toHaveBeenCalledTimes(2)
+  })
+
+  it('says when the server has no models, so the UI can tell voice is not installed', async () => {
+    const { engine } = createEngine(async () => {
+      throw new VoiceModelsMissingError('no models in /opt/models')
+    })
+    const service = new VoiceService(engine)
+
+    await expect(service.prepare()).rejects.toBeInstanceOf(VoiceModelsMissingError)
+    expect(service.getStatus()).toEqual({
+      state: 'error',
+      reason: 'models_missing',
+      message: 'no models in /opt/models',
+    })
   })
 
   it('goes back to idle when the engine loses its models, and reloads on demand', async () => {
@@ -66,5 +83,31 @@ describe('VoiceService', () => {
 
     expect(service.getStatus()).toEqual({ state: 'idle' })
     expect(statuses).toEqual(['loading', 'idle'])
+  })
+
+  it('waits for each chunk to be taken before asking the engine for the next', async () => {
+    const { engine } = createEngine(async () => {})
+    const asked: number[] = []
+    engine.speak = async function* () {
+      for (const index of [0, 1]) {
+        asked.push(index)
+        yield { index, sampleRate: 24000, samples: new Float32Array(1) }
+      }
+    }
+    const service = new VoiceService(engine)
+    let releaseFirst!: () => void
+    const firstTaken = new Promise<void>(resolve => {
+      releaseFirst = resolve
+    })
+
+    const speaking = service.speak('A. B.', 'af_heart', new AbortController().signal, chunk =>
+      chunk.index === 0 ? firstTaken : undefined,
+    )
+    await new Promise(resolve => setTimeout(resolve, 0))
+    expect(asked).toEqual([0])
+
+    releaseFirst()
+    await expect(speaking).resolves.toEqual({ chunkCount: 2, cancelled: false })
+    expect(asked).toEqual([0, 1])
   })
 })

@@ -1,7 +1,7 @@
 import type { KokoroVoiceId, VoiceEngineId } from '../domain/voiceSettings'
 
 export interface VoiceModelProgress {
-  /** 0..1 across every model file being downloaded. */
+  /** 0..1 across every model file being loaded. */
   progress: number
 }
 
@@ -22,4 +22,9 @@ export interface VoiceEngine {
   /** Fires when loaded models are lost, for example when the engine process exits. */
   onUnavailable(listener: (reason: string) => void): () => void
   dispose(): Promise<void>
+}
+
+/** The engine has no models to load. Not a transient failure: retrying will not help. */
+export class VoiceModelsMissingError extends Error {
+  public override readonly name = 'VoiceModelsMissingError'
 }

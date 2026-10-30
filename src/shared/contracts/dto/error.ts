@@ -77,6 +77,11 @@ export const APP_ERROR_CODES = [
   'update.download_failed',
   'update.install_failed',
   'release_notes.get_current_failed',
+  'voice.models_missing',
+  'voice.prepare_failed',
+  'voice.busy',
+  'voice.transcribe_failed',
+  'voice.speak_failed',
 ] as const
 
 export type AppErrorCode = (typeof APP_ERROR_CODES)[number]
