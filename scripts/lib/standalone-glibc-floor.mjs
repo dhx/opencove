@@ -1,6 +1,9 @@
 import { dirname, resolve } from 'node:path'
 
-import { STANDALONE_NATIVE_MODULE_NAMES } from './standalone-native-modules.mjs'
+import {
+  STANDALONE_NATIVE_MODULE_NAMES,
+  STANDALONE_PREBUILT_NATIVE_ARTIFACTS,
+} from './standalone-native-modules.mjs'
 
 /**
  * The versioned-symbol floor for everything we ship in the standalone server bundle.
@@ -40,10 +43,23 @@ export const STANDALONE_GLIBC_FLOOR = Object.freeze({
   GCC: '7.0.0',
 })
 
+/**
+ * Shared libraries that ship inside the bundle next to the module that loads them. A version need
+ * on one of these is satisfied by the bundle itself, not by the host, so the host floor does not
+ * apply to it. onnxruntime-node's binding needs `VERS_<ort version>` from its own
+ * `libonnxruntime.so.1`, which has nothing to do with the host's glibc.
+ */
+export const STANDALONE_BUNDLED_SHARED_LIBRARIES = Object.freeze(['libonnxruntime.so.1'])
+
 // Captures ANY versioned-symbol family, not a hardcoded list. Restricting this to GLIBC/GLIBCXX
 // silently dropped the CXXABI_* and GCC_* requirements the bundled Node also carries, which made
 // `selectFloorViolations`'s promise to report unknown families unreachable.
-const VERSION_NEED_PATTERN = /Name:\s+([A-Za-z][A-Za-z_]*)_([0-9][0-9.]*)/g
+const VERSION_NEED_PATTERN = /Name:\s+([A-Za-z][A-Za-z_]*)_([0-9][0-9.]*)/
+const VERSION_NEED_FILE_PATTERN = /File:\s+(\S+)/
+// readelf prints `.gnu.version_d` (what the artifact defines) with the same `Name:` shape as
+// `.gnu.version_r` (what it needs). A library that defines its own `VERS_1.21.0` asks nothing of
+// the host, so only lines inside the needs section count.
+const SECTION_HEADER_PATTERN = /section '([^']+)'/
 
 /**
  * Extracts the versioned symbol requirements from `readelf --version-info` output.
@@ -52,19 +68,52 @@ const VERSION_NEED_PATTERN = /Name:\s+([A-Za-z][A-Za-z_]*)_([0-9][0-9.]*)/g
  * plain `libm.so.6` dependency is fine, what matters is which *version* of a symbol is demanded.
  *
  * @param {string} readelfOutput
- * @param {{ requireSymbols?: boolean }} [options] When `requireSymbols` is set, output that yields
- *   nothing throws instead of returning an empty list. An empty result is ambiguous — it can mean
- *   "clean artifact" or "we failed to read the artifact" — and silently accepting the latter would
- *   let an unverified binary ship.
+ * @param {{ requireSymbols?: boolean, bundledLibraries?: readonly string[] }} [options] When
+ *   `requireSymbols` is set, output that yields nothing throws instead of returning an empty list.
+ *   An empty result is ambiguous — it can mean "clean artifact" or "we failed to read the artifact"
+ *   — and silently accepting the latter would let an unverified binary ship. Needs on a library in
+ *   `bundledLibraries` are left out of the result, but still count as read.
  * @returns {{ library: string, version: string }[]}
  */
 export function parseVersionedSymbolRequirements(readelfOutput, options = {}) {
+  const bundledLibraries = new Set(options.bundledLibraries ?? [])
   const requirements = []
-  for (const match of String(readelfOutput ?? '').matchAll(VERSION_NEED_PATTERN)) {
-    requirements.push({ library: match[1], version: match[2] })
+  let readCount = 0
+  let currentFile = null
+  // Abridged fixtures may carry no section headers at all; then every `Name:` line is a need.
+  let inNeedsSection = true
+
+  for (const line of String(readelfOutput ?? '').split('\n')) {
+    const sectionMatch = SECTION_HEADER_PATTERN.exec(line)
+    if (sectionMatch) {
+      inNeedsSection = sectionMatch[1] === '.gnu.version_r'
+      currentFile = null
+      continue
+    }
+
+    if (!inNeedsSection) {
+      continue
+    }
+
+    const fileMatch = VERSION_NEED_FILE_PATTERN.exec(line)
+    if (fileMatch) {
+      currentFile = fileMatch[1]
+    }
+
+    const needMatch = VERSION_NEED_PATTERN.exec(line)
+    if (!needMatch) {
+      continue
+    }
+
+    readCount += 1
+    if (currentFile !== null && bundledLibraries.has(currentFile)) {
+      continue
+    }
+
+    requirements.push({ library: needMatch[1], version: needMatch[2] })
   }
 
-  if (options.requireSymbols && requirements.length === 0) {
+  if (options.requireSymbols && readCount === 0) {
     throw new Error(
       'Found no versioned symbol requirements to check. Refusing to report an unread artifact as clean.',
     )
@@ -220,13 +269,22 @@ export function resolveNativeModuleRebuildCommand({
  * them yields "not an ELF file". Checking them would force the gate to tolerate unreadable files,
  * which would in turn let a genuinely unreadable glibc artifact slip through as "clean".
  *
- * @param {{ appRoot: string, bundledNodeExecutable: string, moduleNames?: string[] }} options
+ * Prebuilt natives (shipped as binaries in their npm package, not rebuilt by us) are listed
+ * explicitly in standalone-native-modules.mjs for the same reason.
+ *
+ * @param {{
+ *   appRoot: string,
+ *   bundledNodeExecutable: string,
+ *   moduleNames?: string[],
+ *   prebuiltArtifacts?: readonly (readonly string[])[],
+ * }} options
  * @returns {string[]} Absolute paths, in a stable order.
  */
 export function resolveGlibcFloorArtifacts({
   appRoot,
   bundledNodeExecutable,
   moduleNames = STANDALONE_NATIVE_MODULE_NAMES,
+  prebuiltArtifacts = STANDALONE_PREBUILT_NATIVE_ARTIFACTS,
 }) {
   const artifacts = [bundledNodeExecutable]
 
@@ -235,6 +293,10 @@ export function resolveGlibcFloorArtifacts({
     artifacts.push(
       resolve(releaseDir, NATIVE_MODULE_BINARY_NAMES[moduleName] ?? `${moduleName}.node`),
     )
+  }
+
+  for (const segments of prebuiltArtifacts) {
+    artifacts.push(resolve(appRoot, 'node_modules', ...segments))
   }
 
   return artifacts

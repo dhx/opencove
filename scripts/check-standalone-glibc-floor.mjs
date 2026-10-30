@@ -14,6 +14,7 @@ import { existsSync } from 'node:fs'
 import { relative, resolve } from 'node:path'
 
 import {
+  STANDALONE_BUNDLED_SHARED_LIBRARIES,
   STANDALONE_GLIBC_FLOOR,
   formatFloorViolations,
   parseVersionedSymbolRequirements,
@@ -59,7 +60,10 @@ for (const artifact of artifacts) {
   }
 
   try {
-    const requirements = parseVersionedSymbolRequirements(readelfOutput, { requireSymbols: true })
+    const requirements = parseVersionedSymbolRequirements(readelfOutput, {
+      requireSymbols: true,
+      bundledLibraries: STANDALONE_BUNDLED_SHARED_LIBRARIES,
+    })
     const violations = selectFloorViolations(requirements)
     if (violations.length > 0) {
       failures.push(formatFloorViolations(name, violations))

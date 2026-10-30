@@ -92,6 +92,22 @@ The route file is new and registered once in the request handler. Nothing is add
 - **Image** (separate PR in opencove-image): a build stage downloads Whisper `base.en` q8 and Kokoro q4 by pinned revision and checksum into `/opt/opencove-voice/models`, and sets `OPENCOVE_VOICE_MODELS_DIR`. That adds about 130 MB of models plus about 60 MB of onnxruntime for linux-x64.
 - **Prerequisite:** the image still installs upstream's v0.4.0 release. It has to install this fork's releases before any of our changes reach the container.
 
+## Feasibility results (2026-10-29)
+
+Plan step 1, measured on linux-x64 with Node 22.23.4 and a `electron-builder --linux dir` pack.
+
+- **Versions**: `@huggingface/transformers` stays on **3.8.1**, as in MaxAI. `kokoro-js` 1.2.1 depends on transformers `^3.5.1`; transformers 4.x would bring a second copy of transformers and of onnxruntime-node. All three resolve to one `onnxruntime-node` 1.21.0.
+- **No install-time download**: onnxruntime-node's postinstall fetches CUDA files from nuget.org. pnpm never runs it here, because it is not in `onlyBuiltDependencies`, and the CPU binaries are in the npm package.
+- **Two native files** are all ort needs: `onnxruntime_binding.node` and `libonnxruntime.so.1` (22.3 MB). The package also ships CUDA and TensorRT providers (343 MB), a versioned duplicate of the library, and macOS, Windows and arm64 builds; `build.linux.files` leaves them out.
+- **glibc floor holds**: the highest needs are GLIBC 2.28, GLIBCXX 3.4.22, CXXABI 1.3.11. The floor check had two gaps this exposed: it read version *definitions* (`.gnu.version_d`) as needs, and it had no way to say that a need is met by a library the bundle ships (`VERS_1.21.0` from `libonnxruntime.so.1`). Both are fixed; the ort files are now checked.
+- **sharp** comes along: transformers' Node build imports it statically. linux-x64 only, 17 MB, within the floor. The musl variant is left out.
+- **Trimmed**: transformers' web builds, wasm, maps and sources (44 MB), and `onnxruntime-web` (92 MB), which the Node build never imports.
+- **Footprint**: 76.5 MB for voice in the packed app (ort 22.3, kokoro voices 28, sharp 17, the rest under 4 each), before models.
+- **Loads from the bundle**: after extracting the asar, plain Node loads ort and runs a model, imports transformers and kokoro-js in 150 ms, and with `allowRemoteModels = false` a model request throws without any `fetch`.
+- **Telemetry**: none in transformers or kokoro-js. transformers names `huggingface.co` only as a model host.
+- **phonemizer** (kokoro's espeak-ng wasm) registers a process-wide `unhandledRejection` handler that rethrows. One stray rejection ends the process, so it must only ever load in the voice host child, never in the worker.
+- **Not measured**: Whisper and Kokoro timings with real models. huggingface.co was not reachable from the build sandbox; MaxAI's numbers stand until the image ships models.
+
 ## State owners and invariants
 
 | State | Owner | Durable? |

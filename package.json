@@ -37,7 +37,10 @@
       "out{,/**/*}",
       "src/app/cli{,/**/*}",
       "docs/plugins{,/**/*}",
-      "package.json"
+      "package.json",
+      "!node_modules/onnxruntime-web{,/**/*}",
+      "!node_modules/@huggingface/transformers/{src,types}{,/**/*}",
+      "!node_modules/@huggingface/transformers/dist/{ort-wasm-*,*.map,*.min.*,transformers.js,transformers.web.js}"
     ],
     "extraResources": [
       {
@@ -50,6 +53,15 @@
     },
     "mac": {
       "category": "public.app-category.developer-tools"
+    },
+    "linux": {
+      "files": [
+        "!node_modules/onnxruntime-node/bin/napi-v3/{darwin,win32}{,/**/*}",
+        "!node_modules/onnxruntime-node/bin/napi-v3/linux/arm64{,/**/*}",
+        "!node_modules/onnxruntime-node/bin/napi-v3/linux/x64/libonnxruntime_providers_*.so",
+        "!node_modules/onnxruntime-node/bin/napi-v3/linux/x64/libonnxruntime.so.1.*",
+        "!node_modules/@img/sharp-*linuxmusl-*{,/**/*}"
+      ]
     }
   },
   "bin": {
@@ -124,6 +136,7 @@
     "@dnd-kit/utilities": "^3.2.2",
     "@electron-toolkit/preload": "^3.0.1",
     "@electron-toolkit/utils": "^3.0.0",
+    "@huggingface/transformers": "3.8.1",
     "@radix-ui/react-slot": "^1.2.4",
     "@tailwindcss/vite": "^4.2.1",
     "@xterm/addon-fit": "^0.11.0",
@@ -141,9 +154,11 @@
     "drizzle-orm": "^0.45.1",
     "electron-updater": "^6.8.3",
     "font-list": "^2.0.2",
+    "kokoro-js": "1.2.1",
     "lucide-react": "^0.577.0",
     "monaco-editor": "^0.55.1",
     "node-pty": "^1.1.0",
+    "onnxruntime-node": "1.21.0",
     "postcss": "^8.5.29",
     "postcss-selector-parser": "^7.1.6",
     "postcss-value-parser": "^4.2.0",
