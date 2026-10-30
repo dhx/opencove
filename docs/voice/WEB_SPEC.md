@@ -77,7 +77,8 @@ The route file is new and registered once in the request handler. Nothing is add
 
 ### 3. Browser capture
 
-- **AudioWorklet**, not `MediaStreamTrackProcessor`, which Safari and Firefox lack. The Web UI sets no `script-src`, so a worklet module served from `'self'` loads.
+- **AudioWorklet**, not `MediaStreamTrackProcessor`, which Safari and Firefox lack. The Web UI's CSP meta tag sets `script-src 'self'`, so the worklet is built as its own same-origin asset (`?worker&url`); a `blob:` module would be refused.
+- Recording and playback share one `AudioContext`. On stop the recorder flushes the worklet through its port, whose messages keep their order, so the last words are kept.
 - iOS needs the `AudioContext` to be created or resumed inside the press gesture. The press handler does that before anything else.
 - The microphone is open only while the button is held.
 

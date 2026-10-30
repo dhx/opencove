@@ -141,6 +141,15 @@ import type {
   PrepareIssueReportResult,
   ShowIssueReportFileInput,
 } from '../../shared/contracts/dto'
+import type {
+  VoiceCancelSpeakInput,
+  VoiceEngineStatus,
+  VoiceSpeakChunkEvent,
+  VoiceSpeakInput,
+  VoiceSpeakResult,
+  VoiceTranscribeInput,
+  VoiceTranscribeResult,
+} from '../../shared/contracts/dto'
 import type { ControlSurfaceInvokeRequest } from '../../shared/contracts/controlSurface'
 
 type UnsubscribeFn = () => void
@@ -329,6 +338,16 @@ export interface OpenCoveApi {
     onResync: (listener: (event: TerminalResyncEvent) => void) => UnsubscribeFn
     onState: (listener: (event: TerminalSessionStateEvent) => void) => UnsubscribeFn
     onMetadata: (listener: (event: TerminalSessionMetadataEvent) => void) => UnsubscribeFn
+  }
+  /** Web UI: speech runs on the worker (`/voice/*`). Absent where there is no voice engine. */
+  voice?: {
+    prepare: () => Promise<VoiceEngineStatus>
+    getStatus: () => Promise<VoiceEngineStatus>
+    onStatus: (listener: (status: VoiceEngineStatus) => void) => UnsubscribeFn
+    transcribe: (payload: VoiceTranscribeInput) => Promise<VoiceTranscribeResult>
+    speak: (payload: VoiceSpeakInput) => Promise<VoiceSpeakResult>
+    onSpeakChunk: (listener: (event: VoiceSpeakChunkEvent) => void) => UnsubscribeFn
+    cancelSpeak: (payload: VoiceCancelSpeakInput) => Promise<void>
   }
   agent: {
     listModels: (payload: ListAgentModelsInput) => Promise<ListAgentModelsResult>

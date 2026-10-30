@@ -1,4 +1,3 @@
-import { endianness } from 'node:os'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import {
   HttpBodyTooLargeError,
@@ -8,7 +7,7 @@ import {
 } from '../../../../app/main/controlSurface/http/httpJson'
 import type { AppErrorCode } from '../../../../shared/contracts/dto'
 import { createAppErrorDescriptor } from '../../../../shared/errors/appError'
-import type { VoiceAudioChunk } from '../../application/VoiceEngine'
+import { encodeSpeechFrame } from '../../../../shared/voice/voiceWire'
 import { VoiceModelsMissingError } from '../../application/VoiceEngine'
 import type { VoiceRequestGate } from '../../application/VoiceRequestGate'
 import type { VoiceService } from '../../application/VoiceService'
@@ -32,8 +31,7 @@ export const MAX_TRANSCRIBE_BYTES = MAX_TRANSCRIBE_SECONDS * PCM_SAMPLE_RATE * 2
 export const MAX_SPEAK_TEXT_BYTES = 4 * 1024
 /** Room for the JSON around the text and escaped characters. */
 const MAX_SPEAK_BODY_BYTES = 4 * MAX_SPEAK_TEXT_BYTES
-/** Per sentence: u32 sample rate, u32 sample count, u32 sequence, all little-endian. */
-export const SPEECH_FRAME_HEADER_BYTES = 12
+export { SPEECH_FRAME_HEADER_BYTES } from '../../../../shared/voice/voiceWire'
 
 export function isVoiceRoutePath(pathname: string): boolean {
   return pathname === VOICE_TRANSCRIBE_PATH || pathname === VOICE_SPEAK_PATH
@@ -232,7 +230,7 @@ async function streamSpeech(
   })
 }
 
-function writeWithBackpressure(res: ServerResponse, frame: Buffer): Promise<void> {
+function writeWithBackpressure(res: ServerResponse, frame: Uint8Array): Promise<void> {
   if (res.destroyed) {
     return Promise.resolve()
   }
@@ -248,22 +246,4 @@ function writeWithBackpressure(res: ServerResponse, frame: Buffer): Promise<void
     res.once('drain', done)
     res.once('close', done)
   })
-}
-
-export function encodeSpeechFrame(chunk: VoiceAudioChunk, sequence: number): Buffer {
-  const frame = Buffer.allocUnsafe(SPEECH_FRAME_HEADER_BYTES + chunk.samples.length * 4)
-  frame.writeUInt32LE(chunk.sampleRate, 0)
-  frame.writeUInt32LE(chunk.samples.length, 4)
-  frame.writeUInt32LE(sequence, 8)
-  if (endianness() === 'LE') {
-    Buffer.from(chunk.samples.buffer, chunk.samples.byteOffset, chunk.samples.byteLength).copy(
-      frame,
-      SPEECH_FRAME_HEADER_BYTES,
-    )
-  } else {
-    for (let index = 0; index < chunk.samples.length; index += 1) {
-      frame.writeFloatLE(chunk.samples[index], SPEECH_FRAME_HEADER_BYTES + index * 4)
-    }
-  }
-  return frame
 }

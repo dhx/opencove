@@ -27,6 +27,7 @@ import {
 } from './browserOpenCoveApi.helpers'
 import { createBrowserPersistenceApi } from './browserOpenCoveApi.persistence'
 import { createBrowserAgentApi } from './browserOpenCoveApi.agent'
+import { createBrowserVoiceApi } from './browserOpenCoveApi.voice'
 import { saveTextToDownloadsInBrowser } from './browserOpenCoveApi.downloads'
 import {
   WORKSPACE_SELECT_DIRECTORY_REQUEST_EVENT,
@@ -396,6 +397,7 @@ export function installBrowserOpenCoveApi(): void {
     agent: {
       ...createBrowserAgentApi(),
     },
+    voice: createBrowserVoiceApi(),
     task: {
       suggestTitle: async payload => ({
         title: payload.requirement.split('\n')[0]?.trim() || 'Task',
